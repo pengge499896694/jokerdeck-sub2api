@@ -69,6 +69,7 @@ func RegisterAdminRoutes(
 
 		// 卡密管理
 		registerRedeemCodeRoutes(admin, h)
+		registerXianyuRechargeRoutes(admin, h)
 
 		// 优惠码管理
 		registerPromoCodeRoutes(admin, h)
@@ -130,6 +131,16 @@ func RegisterAdminRoutes(
 
 		// 操作审计日志
 		registerAuditLogRoutes(admin, h, stepUpAuth)
+	}
+}
+
+func registerXianyuRechargeRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	orders := admin.Group("/xianyu-recharge-orders")
+	{
+		orders.GET("", h.Admin.XianyuRecharge.List)
+		orders.GET("/pending-count", h.Admin.XianyuRecharge.PendingCount)
+		orders.POST("/:id/credit", h.Admin.XianyuRecharge.Credit)
+		orders.POST("/:id/reject", h.Admin.XianyuRecharge.Reject)
 	}
 }
 

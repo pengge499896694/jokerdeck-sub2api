@@ -126,6 +126,12 @@ func RegisterUserRoutes(
 			redeem.GET("/history", h.Redeem.GetHistory)
 		}
 
+		xianyuRecharge := authenticated.Group("/xianyu-recharge-orders")
+		{
+			xianyuRecharge.POST("", h.XianyuRecharge.Create)
+			xianyuRecharge.GET("", h.XianyuRecharge.List)
+		}
+
 		// 用户订阅
 		subscriptions := authenticated.Group("/subscriptions")
 		{

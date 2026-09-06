@@ -197,6 +197,7 @@ import Icon from '@/components/icons/Icon.vue'
 import { sanitizeSvg } from '@/utils/sanitize'
 import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
+import { XIANYU_RECHARGE_ENABLED, XIANYU_STORE_ENABLED } from '@/constants/xianyu'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
 
 interface NavItem {
@@ -416,6 +417,21 @@ const CreditCardIcon = {
           'stroke-linecap': 'round',
           'stroke-linejoin': 'round',
           d: 'M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z'
+        })
+      ]
+    )
+}
+
+const StoreIcon = {
+  render: () =>
+    h(
+      'svg',
+      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
+      [
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M3.75 9.75h16.5m-15 0V19.5h13.5V9.75M5.25 4.5h13.5l1.5 5.25H3.75L5.25 4.5zM9 19.5v-5.25h6v5.25'
         })
       ]
     )
@@ -694,6 +710,9 @@ const flagAvailableChannels = makeSidebarFlag(FeatureFlags.availableChannels)
 const flagAffiliate = makeSidebarFlag(FeatureFlags.affiliate)
 const flagRiskControl = makeSidebarFlag(FeatureFlags.riskControl)
 const flagPluginManagement = makeSidebarFlag(FeatureFlags.pluginManagement)
+// 二开模块开关（编译期常量，见 constants/xianyu.ts）。
+const flagXianyuRecharge = () => XIANYU_RECHARGE_ENABLED
+const flagXianyuStore = () => XIANYU_STORE_ENABLED
 const flagOpsMonitoring = () => adminSettingsStore.opsMonitoringEnabled
 const flagAdminPayment = () => adminSettingsStore.paymentEnabled
 const flagBatchImageAccess = () => canUseBatchImage.value
@@ -717,6 +736,8 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
     { path: '/purchase', label: t('nav.buySubscription'), icon: RechargeSubscriptionIcon, hideInSimpleMode: true, featureFlag: flagPayment },
     { path: '/orders', label: t('nav.myOrders'), icon: OrderListIcon, hideInSimpleMode: true, featureFlag: flagPayment },
+    { path: '/recharge', label: t('nav.rechargeCenter'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagXianyuRecharge },
+    { path: '/store', label: t('nav.store'), icon: StoreIcon, hideInSimpleMode: true, featureFlag: flagXianyuStore },
     { path: '/redeem', label: t('nav.redeem'), icon: GiftIcon, hideInSimpleMode: true },
     { path: '/affiliate', label: t('nav.affiliate'), icon: UsersIcon, hideInSimpleMode: true, featureFlag: flagAffiliate },
     { path: '/profile', label: t('nav.profile'), icon: UserIcon },
@@ -745,10 +766,14 @@ const userNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(tru
 const personalNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(false)))
 
 // Custom menu items filtered by visibility
+// 排除 id === 'recharge'：后台 custom_menu_items 里那条「充值中心」（md:recharge）
+// 是二开之前的旧入口，与闲鱼充值属于同一功能，这里一并不展示。
+// 注意它由数据库设置驱动，不受 constants/xianyu.ts 开关影响 —— 若要彻底下线，
+// 还需在「系统设置 → 自定义菜单」里删掉该条目。
 const customMenuItemsForUser = computed(() => {
   const items = appStore.cachedPublicSettings?.custom_menu_items ?? []
   return items
-    .filter((item) => item.visibility === 'user')
+    .filter((item) => item.visibility === 'user' && item.id !== 'recharge')
     .sort((a, b) => a.sort_order - b.sort_order)
 })
 
@@ -793,6 +818,7 @@ const adminNavItems = computed((): NavItem[] => {
       ],
     },
     { path: '/admin/redeem', label: t('nav.redeemCodes'), icon: TicketIcon, hideInSimpleMode: true },
+    { path: '/admin/recharge-orders', label: t('nav.rechargeOrders'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagXianyuRecharge },
     { path: '/admin/promo-codes', label: t('nav.promoCodes'), icon: GiftIcon, hideInSimpleMode: true },
     {
       path: '/admin/affiliates',

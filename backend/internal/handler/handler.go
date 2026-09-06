@@ -43,6 +43,7 @@ type AdminHandlers struct {
 	Affiliate              *admin.AffiliateHandler
 	Compliance             *admin.ComplianceHandler
 	AuditLog               *admin.AuditLogHandler
+	XianyuRecharge         *admin.XianyuRechargeHandler
 }
 
 // Handlers contains all HTTP handlers
@@ -68,6 +69,7 @@ type Handlers struct {
 	ModelPlaza       *ModelPlazaHandler
 	AsyncImage       *AsyncImageHandler
 	BatchImage       *BatchImageHandler
+	XianyuRecharge   *XianyuRechargeHandler
 }
 
 // BuildInfo contains build-time information

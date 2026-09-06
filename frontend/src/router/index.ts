@@ -11,6 +11,7 @@ import { useAdminComplianceStore } from '@/stores/adminCompliance'
 import { useNavigationLoadingState } from '@/composables/useNavigationLoading'
 import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
 import { getSetupStatus } from '@/api/setup'
+import { XIANYU_RECHARGE_ENABLED, XIANYU_STORE_ENABLED } from '@/constants/xianyu'
 import { resolveCompletedSetupRedirectPath } from './setupRedirect'
 import { resolveRouteDocumentTitle } from './title'
 
@@ -252,6 +253,34 @@ const routes: RouteRecordRaw[] = [
       descriptionKey: 'redeem.description'
     }
   },
+  // 二开：闲鱼充值 / 店铺销售。开关见 constants/xianyu.ts；关闭时路由不注册，
+  // 直接访问 /recharge、/store 落到 NotFound。
+  ...(XIANYU_RECHARGE_ENABLED
+    ? [{
+        path: '/recharge',
+        name: 'Recharge',
+        component: () => import('@/views/user/RechargeView.vue'),
+        meta: {
+          requiresAuth: true,
+          requiresAdmin: false,
+          title: 'Recharge Center',
+          titleKey: 'nav.rechargeCenter'
+        }
+      } satisfies RouteRecordRaw]
+    : []),
+  ...(XIANYU_STORE_ENABLED
+    ? [{
+        path: '/store',
+        name: 'Store',
+        component: () => import('@/views/user/StoreView.vue'),
+        meta: {
+          requiresAuth: true,
+          requiresAdmin: false,
+          title: 'Store',
+          titleKey: 'nav.store'
+        }
+      } satisfies RouteRecordRaw]
+    : []),
   {
     path: '/affiliate',
     name: 'Affiliate',
@@ -572,6 +601,20 @@ const routes: RouteRecordRaw[] = [
       descriptionKey: 'admin.redeem.description'
     }
   },
+  // 二开：管理端「充值订单」。开关见 constants/xianyu.ts。
+  ...(XIANYU_RECHARGE_ENABLED
+    ? [{
+        path: '/admin/recharge-orders',
+        name: 'AdminXianyuRechargeOrders',
+        component: () => import('@/views/admin/XianyuRechargeOrdersView.vue'),
+        meta: {
+          requiresAuth: true,
+          requiresAdmin: true,
+          title: 'Recharge Orders',
+          titleKey: 'nav.rechargeOrders'
+        }
+      } satisfies RouteRecordRaw]
+    : []),
   {
     path: '/admin/promo-codes',
     name: 'AdminPromoCodes',
