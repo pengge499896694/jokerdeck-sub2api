@@ -1,8 +1,11 @@
 package admin
 
 import (
+	"html"
+	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
@@ -17,13 +20,37 @@ import (
 // AnnouncementHandler handles admin announcement management
 type AnnouncementHandler struct {
 	announcementService *service.AnnouncementService
+	emailService *service.EmailService
 }
 
 // NewAnnouncementHandler creates a new admin announcement handler
-func NewAnnouncementHandler(announcementService *service.AnnouncementService) *AnnouncementHandler {
+func NewAnnouncementHandler(announcementService *service.AnnouncementService, emailServices ...*service.EmailService) *AnnouncementHandler {
+	var emailService *service.EmailService
+	if len(emailServices) > 0 { emailService = emailServices[0] }
 	return &AnnouncementHandler{
 		announcementService: announcementService,
+		emailService: emailService,
 	}
+}
+
+// SendEmail broadcasts an announcement to all eligible registered users.
+func (h *AnnouncementHandler) SendEmail(c *gin.Context) {
+	if h.emailService == nil { response.Error(c, http.StatusServiceUnavailable, "email service unavailable"); return }
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 { response.BadRequest(c, "Invalid announcement ID"); return }
+	announcement, err := h.announcementService.GetByID(c.Request.Context(), id)
+	if err != nil { response.ErrorFrom(c, err); return }
+	var req struct { Subject string `json:"subject"` }
+	_ = c.ShouldBindJSON(&req)
+	subject := strings.TrimSpace(req.Subject); if subject == "" { subject = announcement.Title }
+	items, _, err := h.announcementService.ListUserReadStatus(c.Request.Context(), id, pagination.PaginationParams{Page: 1, PageSize: 100000, SortBy: "email", SortOrder: "asc"}, "")
+	if err != nil { response.ErrorFrom(c, err); return }
+	type result struct{ sent, failed int }
+	jobs := make(chan string); var wg sync.WaitGroup; var mu sync.Mutex; out := result{}
+	workers := 8; if len(items) < workers { workers = len(items) }
+	for i:=0; i<workers; i++ { wg.Add(1); go func(){ defer wg.Done(); for email := range jobs { body := "<h2>"+html.EscapeString(announcement.Title)+"</h2><div>"+html.EscapeString(announcement.Content)+"</div>"; e := h.emailService.SendEmail(c.Request.Context(), email, subject, body); mu.Lock(); if e != nil { out.failed++ } else { out.sent++ }; mu.Unlock() } }() }
+	for _, item := range items { if item.Eligible && strings.TrimSpace(item.Email)!="" { jobs <- item.Email } }; close(jobs); wg.Wait()
+	response.Success(c, gin.H{"total": out.sent+out.failed, "sent": out.sent, "failed": out.failed})
 }
 
 type CreateAnnouncementRequest struct {

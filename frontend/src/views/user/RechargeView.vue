@@ -155,7 +155,7 @@ import {
   type XianyuRechargeStatus
 } from '@/api/xianyuRecharge'
 
-const xianyuLink = 'https://m.tb.cn/h.82Gn7pD?tk=SveGgF5bCEH'
+const xianyuLink = 'https://m.tb.cn/h.8orR1uB?tk=qgivTTR6A22'
 const appStore = useAppStore()
 const orders = ref<XianyuRechargeOrder[]>([])
 const loading = ref(false)

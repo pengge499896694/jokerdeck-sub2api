@@ -129,6 +129,13 @@
                 <Icon name="chartBar" size="sm" />
               </button>
               <button
+                @click="handleEmail(row)"
+                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400"
+                :title="t('admin.announcements.emailBroadcast')"
+              >
+                <Icon name="mail" size="sm" />
+              </button>
+              <button
                 @click="openEditDialog(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-dark-600 dark:hover:text-gray-300"
                 :title="t('common.edit')"
@@ -596,6 +603,18 @@ async function confirmDelete() {
   } catch (error: any) {
     console.error('Failed to delete announcement:', error)
     appStore.showError(error.response?.data?.detail || t('admin.announcements.failedToDelete'))
+  }
+}
+
+async function handleEmail(row: Announcement) {
+  const subject = window.prompt(t('admin.announcements.emailSubjectPrompt'), row.title)
+  if (subject === null) return
+  if (!window.confirm(t('admin.announcements.emailBroadcastConfirm'))) return
+  try {
+    const result = await adminAPI.announcements.sendEmail(row.id, subject.trim() || row.title)
+    appStore.showSuccess(t('admin.announcements.emailBroadcastSuccess', result))
+  } catch (error: any) {
+    appStore.showError(error.response?.data?.detail || t('admin.announcements.emailBroadcastFailed'))
   }
 }
 

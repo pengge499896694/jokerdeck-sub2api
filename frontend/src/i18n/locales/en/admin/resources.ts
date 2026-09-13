@@ -382,6 +382,11 @@ export default {
       editAnnouncement: 'Edit Announcement',
       deleteAnnouncement: 'Delete Announcement',
       searchAnnouncements: 'Search announcements...',
+      emailBroadcast: 'Email broadcast',
+      emailSubjectPrompt: 'Email subject',
+      emailBroadcastConfirm: 'Send this announcement to all eligible users?',
+      emailBroadcastSuccess: 'Email broadcast complete: {sent} sent, {failed} failed, {total} total',
+      emailBroadcastFailed: 'Email broadcast failed',
       status: 'Status',
       allStatus: 'All Status',
       columns: {

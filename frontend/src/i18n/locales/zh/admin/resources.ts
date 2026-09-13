@@ -379,6 +379,11 @@ export default {
       editAnnouncement: '编辑公告',
       deleteAnnouncement: '删除公告',
       searchAnnouncements: '搜索公告...',
+      emailBroadcast: '邮件推送',
+      emailSubjectPrompt: '邮件主题',
+      emailBroadcastConfirm: '确定向符合条件的所有用户发送邮件吗？',
+      emailBroadcastSuccess: '邮件发送完成：成功 {sent}，失败 {failed}，共 {total}',
+      emailBroadcastFailed: '邮件发送失败',
       status: '状态',
       allStatus: '全部状态',
       columns: {

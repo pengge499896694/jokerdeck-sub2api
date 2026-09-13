@@ -74,13 +74,19 @@ export async function getReadStatus(
   return data
 }
 
+export async function sendEmail(id: number, subject?: string): Promise<{ total: number; sent: number; failed: number }> {
+  const { data } = await apiClient.post(`/admin/announcements/${id}/email`, { subject })
+  return data
+}
+
 const announcementsAPI = {
   list,
   getById,
   create,
   update,
   delete: deleteAnnouncement,
-  getReadStatus
+  getReadStatus,
+  sendEmail
 }
 
 export default announcementsAPI
