@@ -173,6 +173,11 @@ func ProvideAdminSettingHandler(settingService *service.SettingService, emailSer
 	return h
 }
 
+// ProvideAdminAnnouncementHandler wires the optional email broadcaster explicitly.
+func ProvideAdminAnnouncementHandler(announcementService *service.AnnouncementService, emailService *service.EmailService) *admin.AnnouncementHandler {
+	return admin.NewAnnouncementHandler(announcementService, emailService)
+}
+
 // ProvideHandlers creates the Handlers struct
 func ProvideHandlers(
 	authHandler *AuthHandler,
@@ -257,7 +262,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewUserHandler,
 	admin.NewGroupHandlerWithConfig,
 	admin.ProvideAccountHandler,
-	admin.NewAnnouncementHandler,
+	ProvideAdminAnnouncementHandler,
 	admin.NewDataManagementHandler,
 	admin.NewBackupHandler,
 	admin.NewOAuthHandler,
