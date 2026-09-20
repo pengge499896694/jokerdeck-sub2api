@@ -6,43 +6,10 @@
         {{ t('admin.users.bonusReclaim.desc') }}
       </div>
 
-      <!-- 到期回收设置（自动任务） -->
-      <div class="rounded-xl border border-gray-200 p-4 dark:border-dark-600">
-        <label class="input-label">{{ t('admin.users.bonusReclaim.ttlLabel') }}</label>
-        <div class="flex items-center gap-2">
-          <input
-            v-model.number="ttlHours"
-            type="number"
-            min="0"
-            step="1"
-            class="input w-32"
-          />
-          <span class="text-sm text-gray-500 dark:text-gray-400">{{ t('admin.users.bonusReclaim.ttlUnit') }}</span>
-          <button type="button" :disabled="savingTTL" class="btn btn-secondary" @click="saveTTL">
-            {{ savingTTL ? t('common.saving') : t('common.save') }}
-          </button>
-        </div>
-        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.users.bonusReclaim.ttlHint') }}</p>
-      </div>
-
-      <!-- 手动回收范围 -->
-      <div>
-        <label class="input-label">{{ t('admin.users.bonusReclaim.scopeLabel') }}</label>
-        <div class="flex items-center gap-2">
-          <input
-            v-model.number="manualOlderThanHours"
-            type="number"
-            min="0"
-            step="1"
-            class="input w-32"
-            :placeholder="t('admin.users.bonusReclaim.scopeAll')"
-          />
-          <span class="text-sm text-gray-500 dark:text-gray-400">{{ t('admin.users.bonusReclaim.ttlUnit') }}</span>
-          <button type="button" :disabled="loadingPreview" class="btn btn-secondary" @click="loadPreview">
-            {{ loadingPreview ? t('common.loading') : t('admin.users.bonusReclaim.preview') }}
-          </button>
-        </div>
-        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.users.bonusReclaim.scopeHint') }}</p>
+      <div class="flex justify-end">
+        <button type="button" :disabled="loadingPreview" class="btn btn-secondary" @click="loadPreview">
+          {{ loadingPreview ? t('common.loading') : t('admin.users.bonusReclaim.preview') }}
+        </button>
       </div>
 
       <!-- 预览结果 -->
@@ -100,9 +67,6 @@ const emit = defineEmits(['close', 'success'])
 const { t } = useI18n()
 const appStore = useAppStore()
 
-const ttlHours = ref(0)
-const savingTTL = ref(false)
-const manualOlderThanHours = ref<number | null>(null)
 const loadingPreview = ref(false)
 const executing = ref(false)
 const preview = ref<BonusReclaimPreview | null>(null)
@@ -112,8 +76,7 @@ watch(
   async (v) => {
     if (v) {
       preview.value = null
-      manualOlderThanHours.value = null
-      await loadTTL()
+      await loadPreview()
     }
   }
 )
@@ -127,34 +90,10 @@ const formatBalance = (value: number) => {
   return formatted
 }
 
-const loadTTL = async () => {
-  try {
-    const res = await adminAPI.users.getSignupBonusTTL()
-    ttlHours.value = res.ttl_hours ?? 0
-  } catch (e: any) {
-    console.error('Failed to load signup bonus TTL:', e)
-  }
-}
-
-const saveTTL = async () => {
-  savingTTL.value = true
-  try {
-    const res = await adminAPI.users.updateSignupBonusTTL(ttlHours.value || 0)
-    ttlHours.value = res.ttl_hours ?? 0
-    appStore.showSuccess(t('common.success'))
-  } catch (e: any) {
-    console.error('Failed to save signup bonus TTL:', e)
-    appStore.showError(e.response?.data?.detail || t('common.error'))
-  } finally {
-    savingTTL.value = false
-  }
-}
-
 const loadPreview = async () => {
   loadingPreview.value = true
   try {
-    const hours = manualOlderThanHours.value && manualOlderThanHours.value > 0 ? manualOlderThanHours.value : undefined
-    preview.value = await adminAPI.users.previewBonusReclaim(hours)
+    preview.value = await adminAPI.users.previewBonusReclaim()
   } catch (e: any) {
     console.error('Failed to preview bonus reclaim:', e)
     appStore.showError(e.response?.data?.detail || t('common.error'))
@@ -174,8 +113,7 @@ const handleExecute = async () => {
   if (!ok) return
   executing.value = true
   try {
-    const hours = manualOlderThanHours.value && manualOlderThanHours.value > 0 ? manualOlderThanHours.value : undefined
-    const res = await adminAPI.users.executeBonusReclaim(hours)
+    const res = await adminAPI.users.executeBonusReclaim()
     appStore.showSuccess(
       t('admin.users.bonusReclaim.done', {
         count: res.reclaimed_count,

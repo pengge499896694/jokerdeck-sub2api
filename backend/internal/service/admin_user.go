@@ -654,7 +654,51 @@ func (s *adminServiceImpl) PreviewSignupBonusReclaim(ctx context.Context, olderT
 
 // ExecuteSignupBonusReclaim 见 AdminService：把命中账号余额清零，并失效相关鉴权/计费缓存。
 func (s *adminServiceImpl) ExecuteSignupBonusReclaim(ctx context.Context, olderThan *time.Time) (*SignupBonusReclaimResult, error) {
-	entries, err := s.userRepo.ReclaimBonusBalances(ctx, olderThan)
+	if s.redeemCodeRepo == nil {
+		return nil, errors.New("redeem code repository is required for reclaim audit records")
+	}
+
+	reclaim := func(opCtx context.Context) ([]ReclaimedBonusEntry, error) {
+		entries, err := s.userRepo.ReclaimBonusBalances(opCtx, olderThan)
+		if err != nil || len(entries) == 0 {
+			return entries, err
+		}
+
+		now := time.Now().UTC()
+		records := make([]RedeemCode, 0, len(entries))
+		for _, entry := range entries {
+			code, genErr := GenerateRedeemCode()
+			if genErr != nil {
+				return nil, fmt.Errorf("generate reclaim audit code: %w", genErr)
+			}
+			userID := entry.UserID
+			records = append(records, RedeemCode{
+				Code: code, Type: AdjustmentTypeAdminBalance, Value: -entry.Amount,
+				Status: StatusUsed, UsedBy: &userID, UsedAt: &now,
+				Notes: InactiveBalanceReclaimNote,
+			})
+		}
+		if err := s.redeemCodeRepo.CreateBatch(opCtx, records); err != nil {
+			return nil, fmt.Errorf("write reclaim audit records: %w", err)
+		}
+		return entries, nil
+	}
+
+	var entries []ReclaimedBonusEntry
+	var err error
+	if s.entClient != nil {
+		tx, txErr := s.entClient.Tx(ctx)
+		if txErr != nil {
+			return nil, txErr
+		}
+		defer func() { _ = tx.Rollback() }()
+		entries, err = reclaim(dbent.NewTxContext(ctx, tx))
+		if err == nil {
+			err = tx.Commit()
+		}
+	} else {
+		entries, err = reclaim(ctx)
+	}
 	if err != nil {
 		return nil, err
 	}

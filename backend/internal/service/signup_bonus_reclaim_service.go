@@ -17,8 +17,7 @@ type signupBonusTTLProvider interface {
 	GetSignupBonusTTLHours(ctx context.Context) int
 }
 
-// SignupBonusReclaimService 周期性回收"从未充值、注册满 TTL"的账号赠额。
-// 当 signup_bonus_ttl_hours <= 0 时不做任何事（等价于关闭）。
+// SignupBonusReclaimService 周期性回收连续 30 天未使用且无充值记录的账号余额。
 type SignupBonusReclaimService struct {
 	reclaimer signupBonusReclaimer
 	ttl       signupBonusTTLProvider
@@ -38,7 +37,7 @@ func NewSignupBonusReclaimService(reclaimer signupBonusReclaimer, ttl signupBonu
 }
 
 func (s *SignupBonusReclaimService) Start() {
-	if s == nil || s.reclaimer == nil || s.ttl == nil || s.interval <= 0 {
+	if s == nil || s.reclaimer == nil || s.interval <= 0 {
 		return
 	}
 	s.wg.Add(1)
@@ -73,18 +72,12 @@ func (s *SignupBonusReclaimService) runOnce() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	hours := s.ttl.GetSignupBonusTTLHours(ctx)
-	if hours <= 0 {
-		return // 未启用到期回收
-	}
-
-	cutoff := time.Now().Add(-time.Duration(hours) * time.Hour)
-	result, err := s.reclaimer.ExecuteSignupBonusReclaim(ctx, &cutoff)
+	result, err := s.reclaimer.ExecuteSignupBonusReclaim(ctx, nil)
 	if err != nil {
 		log.Printf("[SignupBonusReclaim] reclaim failed: %v", err)
 		return
 	}
 	if result != nil && result.ReclaimedCount > 0 {
-		log.Printf("[SignupBonusReclaim] reclaimed %d accounts, total=%.8f (ttl=%dh)", result.ReclaimedCount, result.TotalAmount, hours)
+		log.Printf("[InactiveBalanceReclaim] reclaimed %d accounts, total=%.8f (inactive_days=30)", result.ReclaimedCount, result.TotalAmount)
 	}
 }

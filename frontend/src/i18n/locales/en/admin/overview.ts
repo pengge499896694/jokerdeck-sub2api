@@ -437,22 +437,16 @@ export default {
       description: 'Manage users and their permissions',
       createUser: 'Create User',
       bonusReclaim: {
-        action: 'Reclaim bonus',
-        title: 'Reclaim signup bonus',
-        desc: 'Zero out the balance of accounts that never recharged and only hold their signup bonus (regular users with balance > 0 and total recharged = 0). Paying users are never affected. Accounts are not deleted — users regain access after recharging or redeeming a code.',
-        ttlLabel: 'Signup bonus validity (auto-reclaim)',
-        ttlUnit: 'hours',
-        ttlHint: 'Set to 0 to disable auto-reclaim. Set to 24 so a new account whose bonus is not converted by any recharge/redeem within 24h gets zeroed out. Checked every 30 minutes.',
-        scopeLabel: 'Manual scope (optional: only accounts registered ≥ N hours ago)',
-        scopeAll: 'Empty = all un-recharged bonus accounts',
-        scopeHint: 'Leave empty to reclaim all never-recharged bonus accounts; enter hours to only reclaim accounts registered before that age.',
+        action: 'Reclaim inactive balances',
+        title: 'Reclaim inactive user balances',
+        desc: 'Fixed rule: only regular users with a balance of at least $0.30, no usage in the last 30 days, no recharge total, and no positive administrator balance adjustment are eligible. Accounts are not deleted. Every reclaim is recorded in balance history for review, refund, or restoration.',
         preview: 'Preview',
         hitCount: 'Matched accounts',
         totalAmount: 'Total to reclaim',
         sampleTruncated: 'Showing first {shown} of {total}',
         execute: 'Reclaim ({count})',
         confirm: 'Zero out the balance of {count} accounts? Reclaiming ${amount} in total. Accounts are not deleted; users can recharge to continue.',
-        done: 'Reclaimed bonus from {count} accounts, ${amount} total'
+        done: 'Reclaimed balances from {count} inactive accounts, ${amount} total'
       },
       bulkDelete: {
         action: 'Delete selected ({count})',

@@ -16,7 +16,9 @@ import (
 	dbgroup "github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
+	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
+	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	dbuser "github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
@@ -992,12 +994,15 @@ func (r *userRepository) SetBalance(ctx context.Context, id int64, value float64
 
 // CountReclaimableBonusUsers 见 service.UserRepository：统计仅剩注册赠额、从未充值的账号。
 func (r *userRepository) CountReclaimableBonusUsers(ctx context.Context, olderThan *time.Time) (int64, float64, error) {
+	inactiveSince := time.Now().UTC().Add(-service.InactiveBalanceReclaimWindow)
 	query := `SELECT COUNT(*), COALESCE(SUM(balance), 0)
 		FROM users
-		WHERE role = $1 AND deleted_at IS NULL AND total_recharged <= 0 AND balance > 0`
-	args := []any{service.RoleUser}
+		WHERE role = $1 AND deleted_at IS NULL AND total_recharged <= 0 AND balance >= $2
+		  AND NOT EXISTS (SELECT 1 FROM redeem_codes rc WHERE rc.used_by = users.id AND rc.type = 'admin_balance' AND rc.value > 0)
+		  AND NOT EXISTS (SELECT 1 FROM usage_logs ul WHERE ul.user_id = users.id AND ul.created_at >= $3)`
+	args := []any{service.RoleUser, service.InactiveBalanceReclaimMinimum, inactiveSince}
 	if olderThan != nil {
-		query += ` AND created_at < $2`
+		query += ` AND created_at < $4`
 		args = append(args, olderThan.UTC())
 	}
 	rows, err := clientFromContext(ctx, r.client).QueryContext(ctx, query, args...)
@@ -1024,8 +1029,16 @@ func (r *userRepository) ListReclaimableBonusUsers(ctx context.Context, olderTha
 	}
 	q := clientFromContext(ctx, r.client).User.Query().Where(
 		dbuser.RoleEQ(service.RoleUser),
+		dbuser.DeletedAtIsNil(),
 		dbuser.TotalRechargedLTE(0),
-		dbuser.BalanceGT(0),
+		dbuser.BalanceGTE(service.InactiveBalanceReclaimMinimum),
+		dbuser.Not(dbuser.HasRedeemCodesWith(
+			redeemcode.TypeEQ(service.AdjustmentTypeAdminBalance),
+			redeemcode.ValueGT(0),
+		)),
+		dbuser.Not(dbuser.HasUsageLogsWith(
+			usagelog.CreatedAtGTE(time.Now().UTC().Add(-service.InactiveBalanceReclaimWindow)),
+		)),
 	)
 	if olderThan != nil {
 		q = q.Where(dbuser.CreatedAtLT(olderThan.UTC()))
@@ -1044,14 +1057,17 @@ func (r *userRepository) ListReclaimableBonusUsers(ctx context.Context, olderTha
 // ReclaimBonusBalances 见 service.UserRepository：原子地把可回收账号的余额清零并返回回收明细。
 // 用 FOR UPDATE SKIP LOCKED 避免与并发的计费/充值写操作互相阻塞，且天然幂等（余额为 0 后不再命中）。
 func (r *userRepository) ReclaimBonusBalances(ctx context.Context, olderThan *time.Time) ([]service.ReclaimedBonusEntry, error) {
+	inactiveSince := time.Now().UTC().Add(-service.InactiveBalanceReclaimWindow)
 	query := `
 		WITH victims AS (
 			SELECT id, balance
 			FROM users
-			WHERE role = $1 AND deleted_at IS NULL AND total_recharged <= 0 AND balance > 0`
-	args := []any{service.RoleUser}
+			WHERE role = $1 AND deleted_at IS NULL AND total_recharged <= 0 AND balance >= $2
+			  AND NOT EXISTS (SELECT 1 FROM redeem_codes rc WHERE rc.used_by = users.id AND rc.type = 'admin_balance' AND rc.value > 0)
+			  AND NOT EXISTS (SELECT 1 FROM usage_logs ul WHERE ul.user_id = users.id AND ul.created_at >= $3)`
+	args := []any{service.RoleUser, service.InactiveBalanceReclaimMinimum, inactiveSince}
 	if olderThan != nil {
-		query += ` AND created_at < $2`
+		query += ` AND created_at < $4`
 		args = append(args, olderThan.UTC())
 	}
 	query += `
