@@ -26,8 +26,9 @@
           <div
             v-for="s in preview.samples"
             :key="s.user_id"
-            class="flex items-center justify-between px-2 py-1 text-xs"
+            class="flex items-center justify-between gap-2 px-2 py-1 text-xs"
           >
+            <input v-model="excludedUserIds" :value="s.user_id" type="checkbox" class="checkbox shrink-0" />
             <span class="truncate text-gray-700 dark:text-gray-300">{{ s.email }}</span>
             <span class="ml-2 shrink-0 text-gray-500 dark:text-gray-400">${{ formatBalance(s.balance) }} · {{ formatDateTime(s.created_at) }}</span>
           </div>
@@ -35,6 +36,9 @@
             {{ t('admin.users.bonusReclaim.sampleTruncated', { shown: preview.samples.length, total: preview.count }) }}
           </p>
         </div>
+        <p class="border-t border-gray-200 px-4 py-2 text-xs text-gray-500 dark:border-dark-600 dark:text-gray-400">
+          {{ t('admin.users.bonusReclaim.excludeHint', { count: excludedUserIds.length }) }}
+        </p>
       </div>
     </div>
 
@@ -47,6 +51,9 @@
           @click="handleExecute"
         >
           {{ executing ? t('common.processing') : t('admin.users.bonusReclaim.execute', { count: preview?.count ?? 0 }) }}
+        </button>
+        <button v-if="lastBatchId" class="btn btn-secondary" :disabled="rollingBack" @click="handleRollback">
+          {{ rollingBack ? t('common.processing') : t('admin.users.bonusReclaim.rollback') }}
         </button>
       </div>
     </template>
@@ -69,13 +76,18 @@ const appStore = useAppStore()
 
 const loadingPreview = ref(false)
 const executing = ref(false)
+const rollingBack = ref(false)
 const preview = ref<BonusReclaimPreview | null>(null)
+const excludedUserIds = ref<number[]>([])
+const lastBatchId = ref('')
 
 watch(
   () => props.show,
   async (v) => {
     if (v) {
       preview.value = null
+      excludedUserIds.value = []
+      lastBatchId.value = ''
       await loadPreview()
     }
   }
@@ -113,7 +125,8 @@ const handleExecute = async () => {
   if (!ok) return
   executing.value = true
   try {
-    const res = await adminAPI.users.executeBonusReclaim()
+    const res = await adminAPI.users.executeBonusReclaim(undefined, excludedUserIds.value)
+    lastBatchId.value = res.batch_id || ''
     appStore.showSuccess(
       t('admin.users.bonusReclaim.done', {
         count: res.reclaimed_count,
@@ -121,12 +134,28 @@ const handleExecute = async () => {
       })
     )
     emit('success')
-    emit('close')
   } catch (e: any) {
     console.error('Failed to execute bonus reclaim:', e)
     appStore.showError(e.response?.data?.detail || t('common.error'))
   } finally {
     executing.value = false
+  }
+}
+
+const handleRollback = async () => {
+  if (!lastBatchId.value) return
+  if (!window.confirm(t('admin.users.bonusReclaim.rollbackConfirm'))) return
+  rollingBack.value = true
+  try {
+    await adminAPI.users.rollbackBonusReclaim(lastBatchId.value)
+    appStore.showSuccess(t('admin.users.bonusReclaim.rollbackDone'))
+    lastBatchId.value = ''
+    emit('success')
+    await loadPreview()
+  } catch (e: any) {
+    appStore.showError(e.response?.data?.detail || t('common.error'))
+  } finally {
+    rollingBack.value = false
   }
 }
 </script>

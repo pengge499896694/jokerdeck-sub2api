@@ -13,6 +13,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
+	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -620,6 +621,7 @@ type SignupBonusReclaimPreview struct {
 type SignupBonusReclaimResult struct {
 	ReclaimedCount int64   `json:"reclaimed_count"` // 实际清零的账号数
 	TotalAmount    float64 `json:"total_amount"`    // 实际回收的余额合计
+	BatchID        string  `json:"batch_id,omitempty"`
 }
 
 const signupBonusReclaimPreviewLimit = 100
@@ -658,6 +660,10 @@ func (s *adminServiceImpl) ExecuteSignupBonusReclaim(ctx context.Context, olderT
 		return nil, errors.New("redeem code repository is required for reclaim audit records")
 	}
 
+	batchID, batchErr := GenerateRedeemCode()
+	if batchErr != nil {
+		return nil, fmt.Errorf("generate reclaim batch id: %w", batchErr)
+	}
 	reclaim := func(opCtx context.Context) ([]ReclaimedBonusEntry, error) {
 		entries, err := s.userRepo.ReclaimBonusBalances(opCtx, olderThan)
 		if err != nil || len(entries) == 0 {
@@ -675,7 +681,7 @@ func (s *adminServiceImpl) ExecuteSignupBonusReclaim(ctx context.Context, olderT
 			records = append(records, RedeemCode{
 				Code: code, Type: AdjustmentTypeAdminBalance, Value: -entry.Amount,
 				Status: StatusUsed, UsedBy: &userID, UsedAt: &now,
-				Notes: InactiveBalanceReclaimNote,
+				Notes: fmt.Sprintf("batch=%s; %s", batchID, InactiveBalanceReclaimNote),
 			})
 		}
 		if err := s.redeemCodeRepo.CreateBatch(opCtx, records); err != nil {
@@ -702,7 +708,7 @@ func (s *adminServiceImpl) ExecuteSignupBonusReclaim(ctx context.Context, olderT
 	if err != nil {
 		return nil, err
 	}
-	result := &SignupBonusReclaimResult{ReclaimedCount: int64(len(entries))}
+	result := &SignupBonusReclaimResult{ReclaimedCount: int64(len(entries)), BatchID: batchID}
 	if len(entries) == 0 {
 		return result, nil
 	}
@@ -735,6 +741,63 @@ func (s *adminServiceImpl) ExecuteSignupBonusReclaim(ctx context.Context, olderT
 
 	logger.LegacyPrintf("service.admin", "signup bonus reclaimed: count=%d total=%.8f older_than=%v", result.ReclaimedCount, result.TotalAmount, olderThan)
 	return result, nil
+}
+
+// RollbackInactiveBalanceReclaim restores one completed reclaim batch exactly once.
+func (s *adminServiceImpl) RollbackInactiveBalanceReclaim(ctx context.Context, batchID string) error {
+	if strings.TrimSpace(batchID) == "" || s.entClient == nil || s.redeemCodeRepo == nil {
+		return errors.New("invalid reclaim batch")
+	}
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	txCtx := dbent.NewTxContext(ctx, tx)
+	codes, err := tx.Client().RedeemCode.Query().Where(
+		redeemcode.TypeEQ(AdjustmentTypeAdminBalance),
+		redeemcode.ValueLT(0),
+		redeemcode.NotesContains("batch="+batchID+";"),
+	).All(txCtx)
+	if err != nil {
+		return err
+	}
+	if len(codes) == 0 {
+		return errors.New("reclaim batch not found or already rolled back")
+	}
+	var rolledBack bool
+	rolledBack, err = tx.Client().RedeemCode.Query().Where(redeemcode.NotesContains("rollback_of=" + batchID)).Exist(txCtx)
+	if err != nil {
+		return err
+	}
+	if rolledBack {
+		return errors.New("reclaim batch already rolled back")
+	}
+	for _, code := range codes {
+		if code.UsedBy == nil {
+			continue
+		}
+		if _, err := s.userRepo.AdjustBalance(txCtx, *code.UsedBy, -code.Value); err != nil {
+			return err
+		}
+	}
+	records := make([]RedeemCode, 0, len(codes))
+	now := time.Now().UTC()
+	for _, code := range codes {
+		if code.UsedBy == nil {
+			continue
+		}
+		uid := *code.UsedBy
+		rollbackCode, err := GenerateRedeemCode()
+		if err != nil {
+			return err
+		}
+		records = append(records, RedeemCode{Code: rollbackCode, Type: AdjustmentTypeAdminBalance, Value: -code.Value, Status: StatusUsed, UsedBy: &uid, UsedAt: &now, Notes: "rollback_of=" + batchID})
+	}
+	if err := s.redeemCodeRepo.CreateBatch(txCtx, records); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *adminServiceImpl) GetUserAPIKeys(ctx context.Context, userID int64, page, pageSize int, sortBy, sortOrder string) ([]APIKey, int64, error) {

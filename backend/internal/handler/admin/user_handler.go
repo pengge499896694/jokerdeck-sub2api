@@ -419,6 +419,10 @@ func (h *UserHandler) PreviewBonusReclaim(c *gin.Context) {
 	response.Success(c, preview)
 }
 
+type executeBonusReclaimRequest struct {
+	ExcludeUserIDs []int64 `json:"exclude_user_ids"`
+}
+
 // ExecuteBonusReclaim 执行注册赠额回收，把命中账号余额清零。
 // POST /api/v1/admin/users/reclaim-bonus?older_than_hours=24
 func (h *UserHandler) ExecuteBonusReclaim(c *gin.Context) {
@@ -427,12 +431,35 @@ func (h *UserHandler) ExecuteBonusReclaim(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	result, err := h.adminService.ExecuteSignupBonusReclaim(c.Request.Context(), olderThan)
+	var req executeBonusReclaimRequest
+	if c.Request.ContentLength != 0 {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			response.BadRequest(c, "invalid exclude_user_ids")
+			return
+		}
+	}
+	ctx := service.WithReclaimExcludedUserIDs(c.Request.Context(), req.ExcludeUserIDs)
+	result, err := h.adminService.ExecuteSignupBonusReclaim(ctx, olderThan)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
 	response.Success(c, result)
+}
+
+func (h *UserHandler) RollbackBonusReclaim(c *gin.Context) {
+	rollbacker, ok := h.adminService.(interface {
+		RollbackInactiveBalanceReclaim(context.Context, string) error
+	})
+	if !ok {
+		response.Error(c, 501, "reclaim rollback unavailable")
+		return
+	}
+	if err := rollbacker.RollbackInactiveBalanceReclaim(c.Request.Context(), strings.TrimSpace(c.Param("batch_id"))); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"message": "reclaim batch rolled back"})
 }
 
 // GetSignupBonusTTL 获取注册赠额有效期设置（小时，0 = 关闭到期回收）。

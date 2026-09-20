@@ -417,6 +417,7 @@ export interface BonusReclaimPreview {
 export interface BonusReclaimResult {
   reclaimed_count: number
   total_amount: number
+  batch_id?: string
 }
 
 /**
@@ -433,13 +434,17 @@ export async function previewBonusReclaim(olderThanHours?: number): Promise<Bonu
 }
 
 /** 执行注册赠额回收，把命中账号余额清零。 */
-export async function executeBonusReclaim(olderThanHours?: number): Promise<BonusReclaimResult> {
+export async function executeBonusReclaim(olderThanHours?: number, excludeUserIds: number[] = []): Promise<BonusReclaimResult> {
   const params: Record<string, any> = {}
   if (olderThanHours && olderThanHours > 0) params.older_than_hours = olderThanHours
-  const { data } = await apiClient.post<BonusReclaimResult>('/admin/users/reclaim-bonus', null, {
+  const { data } = await apiClient.post<BonusReclaimResult>('/admin/users/reclaim-bonus', { exclude_user_ids: excludeUserIds }, {
     params
   })
   return data
+}
+
+export async function rollbackBonusReclaim(batchId: string): Promise<void> {
+  await apiClient.post(`/admin/users/reclaim-bonus/${encodeURIComponent(batchId)}/rollback`)
 }
 
 /** 获取注册赠额有效期（小时，0 = 关闭到期回收）。 */
@@ -476,6 +481,7 @@ export const usersAPI = {
   resetPlatformQuotaWindow,
   previewBonusReclaim,
   executeBonusReclaim,
+  rollbackBonusReclaim,
   getSignupBonusTTL,
   updateSignupBonusTTL,
 }

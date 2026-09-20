@@ -315,6 +315,7 @@ func registerUserManagementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		// 注册赠额回收（僵尸/白嫖号）：先预览再执行；older_than_hours 可选
 		users.GET("/reclaim-bonus/preview", h.Admin.User.PreviewBonusReclaim)
 		users.POST("/reclaim-bonus", h.Admin.User.ExecuteBonusReclaim)
+		users.POST("/reclaim-bonus/:batch_id/rollback", h.Admin.User.RollbackBonusReclaim)
 		users.GET("/signup-bonus-ttl", h.Admin.User.GetSignupBonusTTL)
 		users.PUT("/signup-bonus-ttl", h.Admin.User.UpdateSignupBonusTTL)
 		users.GET("/:id", h.Admin.User.GetByID)

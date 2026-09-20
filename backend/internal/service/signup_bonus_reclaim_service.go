@@ -37,25 +37,7 @@ func NewSignupBonusReclaimService(reclaimer signupBonusReclaimer, ttl signupBonu
 }
 
 func (s *SignupBonusReclaimService) Start() {
-	if s == nil || s.reclaimer == nil || s.interval <= 0 {
-		return
-	}
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		ticker := time.NewTicker(s.interval)
-		defer ticker.Stop()
-
-		s.runOnce()
-		for {
-			select {
-			case <-ticker.C:
-				s.runOnce()
-			case <-s.stopCh:
-				return
-			}
-		}
-	}()
+	// Manual-only: never reclaim balances immediately after deployment.
 }
 
 func (s *SignupBonusReclaimService) Stop() {

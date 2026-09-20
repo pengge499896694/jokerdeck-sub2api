@@ -28,6 +28,17 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+type reclaimExcludedUserIDsContextKey struct{}
+
+func WithReclaimExcludedUserIDs(ctx context.Context, ids []int64) context.Context {
+	return context.WithValue(ctx, reclaimExcludedUserIDsContextKey{}, append([]int64(nil), ids...))
+}
+
+func ReclaimExcludedUserIDs(ctx context.Context) []int64 {
+	ids, _ := ctx.Value(reclaimExcludedUserIDsContextKey{}).([]int64)
+	return ids
+}
+
 var (
 	ErrUserNotFound             = infraerrors.NotFound("USER_NOT_FOUND", "user not found")
 	ErrPasswordIncorrect        = infraerrors.BadRequest("PASSWORD_INCORRECT", "current password is incorrect")

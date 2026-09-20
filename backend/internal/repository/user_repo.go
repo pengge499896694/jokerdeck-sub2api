@@ -997,12 +997,16 @@ func (r *userRepository) CountReclaimableBonusUsers(ctx context.Context, olderTh
 	inactiveSince := time.Now().UTC().Add(-service.InactiveBalanceReclaimWindow)
 	query := `SELECT COUNT(*), COALESCE(SUM(balance), 0)
 		FROM users
-		WHERE role = $1 AND deleted_at IS NULL AND total_recharged <= 0 AND balance >= $2
+		WHERE role = $1 AND deleted_at IS NULL AND balance > $2
 		  AND NOT EXISTS (SELECT 1 FROM redeem_codes rc WHERE rc.used_by = users.id AND rc.type = 'admin_balance' AND rc.value > 0)
 		  AND NOT EXISTS (SELECT 1 FROM usage_logs ul WHERE ul.user_id = users.id AND ul.created_at >= $3)`
 	args := []any{service.RoleUser, service.InactiveBalanceReclaimMinimum, inactiveSince}
+	if excluded := service.ReclaimExcludedUserIDs(ctx); len(excluded) > 0 {
+		query += ` AND NOT (users.id = ANY($4))`
+		args = append(args, pq.Array(excluded))
+	}
 	if olderThan != nil {
-		query += ` AND created_at < $4`
+		query += fmt.Sprintf(" AND created_at < $%d", len(args)+1)
 		args = append(args, olderThan.UTC())
 	}
 	rows, err := clientFromContext(ctx, r.client).QueryContext(ctx, query, args...)
@@ -1030,8 +1034,7 @@ func (r *userRepository) ListReclaimableBonusUsers(ctx context.Context, olderTha
 	q := clientFromContext(ctx, r.client).User.Query().Where(
 		dbuser.RoleEQ(service.RoleUser),
 		dbuser.DeletedAtIsNil(),
-		dbuser.TotalRechargedLTE(0),
-		dbuser.BalanceGTE(service.InactiveBalanceReclaimMinimum),
+		dbuser.BalanceGT(service.InactiveBalanceReclaimMinimum),
 		dbuser.Not(dbuser.HasRedeemCodesWith(
 			redeemcode.TypeEQ(service.AdjustmentTypeAdminBalance),
 			redeemcode.ValueGT(0),
@@ -1040,6 +1043,9 @@ func (r *userRepository) ListReclaimableBonusUsers(ctx context.Context, olderTha
 			usagelog.CreatedAtGTE(time.Now().UTC().Add(-service.InactiveBalanceReclaimWindow)),
 		)),
 	)
+	if excluded := service.ReclaimExcludedUserIDs(ctx); len(excluded) > 0 {
+		q = q.Where(dbuser.IDNotIn(excluded...))
+	}
 	if olderThan != nil {
 		q = q.Where(dbuser.CreatedAtLT(olderThan.UTC()))
 	}
@@ -1062,12 +1068,16 @@ func (r *userRepository) ReclaimBonusBalances(ctx context.Context, olderThan *ti
 		WITH victims AS (
 			SELECT id, balance
 			FROM users
-			WHERE role = $1 AND deleted_at IS NULL AND total_recharged <= 0 AND balance >= $2
+			WHERE role = $1 AND deleted_at IS NULL AND balance > $2
 			  AND NOT EXISTS (SELECT 1 FROM redeem_codes rc WHERE rc.used_by = users.id AND rc.type = 'admin_balance' AND rc.value > 0)
 			  AND NOT EXISTS (SELECT 1 FROM usage_logs ul WHERE ul.user_id = users.id AND ul.created_at >= $3)`
 	args := []any{service.RoleUser, service.InactiveBalanceReclaimMinimum, inactiveSince}
+	if excluded := service.ReclaimExcludedUserIDs(ctx); len(excluded) > 0 {
+		query += ` AND NOT (users.id = ANY($4))`
+		args = append(args, pq.Array(excluded))
+	}
 	if olderThan != nil {
-		query += ` AND created_at < $4`
+		query += fmt.Sprintf(" AND created_at < $%d", len(args)+1)
 		args = append(args, olderThan.UTC())
 	}
 	query += `

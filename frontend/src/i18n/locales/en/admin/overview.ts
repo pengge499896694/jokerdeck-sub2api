@@ -439,8 +439,12 @@ export default {
       bonusReclaim: {
         action: 'Reclaim inactive balances',
         title: 'Reclaim inactive user balances',
-        desc: 'Fixed rule: only regular users with a balance of at least $0.30, no usage in the last 30 days, no recharge total, and no positive administrator balance adjustment are eligible. Accounts are not deleted. Every reclaim is recorded in balance history for review, refund, or restoration.',
+        desc: 'Fixed rule: regular users with a balance above $0.30, no usage in the last 30 days, and no positive administrator balance adjustment are eligible. Self-redeemed balances are allowed. Preview first, exclude possible false positives, then execute manually; deployment never reclaims automatically. Each batch can be rolled back.',
         preview: 'Preview',
+        excludeHint: 'Checked users are kept: {count} excluded',
+        rollback: 'Rollback batch',
+        rollbackConfirm: 'Rollback the most recent reclaim batch?',
+        rollbackDone: 'Reclaim batch rolled back',
         hitCount: 'Matched accounts',
         totalAmount: 'Total to reclaim',
         sampleTruncated: 'Showing first {shown} of {total}',
