@@ -423,6 +423,14 @@ func ProvideSubscriptionExpiryService(userSubRepo UserSubscriptionRepository, se
 	return svc
 }
 
+// ProvideSignupBonusReclaimService creates and starts SignupBonusReclaimService.
+// 每 30 分钟扫描一次；仅当 signup_bonus_ttl_hours > 0 时才实际回收。
+func ProvideSignupBonusReclaimService(adminService AdminService, settingService *SettingService) *SignupBonusReclaimService {
+	svc := NewSignupBonusReclaimService(adminService, settingService, 30*time.Minute)
+	svc.Start()
+	return svc
+}
+
 // ProvideTimingWheelService creates and starts TimingWheelService
 func ProvideTimingWheelService() (*TimingWheelService, error) {
 	svc, err := NewTimingWheelService()
@@ -914,6 +922,7 @@ var ProviderSet = wire.NewSet(
 	ProvideOpenAICodexVersionSyncService,
 	ProvideProxyExpiryService,
 	ProvideSubscriptionExpiryService,
+	ProvideSignupBonusReclaimService,
 	ProvideTimingWheelService,
 	ProvideDashboardAggregationService,
 	ProvideUsageCleanupService,

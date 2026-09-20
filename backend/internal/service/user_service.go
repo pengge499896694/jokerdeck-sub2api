@@ -128,6 +128,12 @@ func (f UserUpdateFields) IsEmpty() bool {
 	return f == UserUpdateFields{}
 }
 
+// ReclaimedBonusEntry 记录一次注册赠额回收命中的账号及其回收金额（即回收前余额）。
+type ReclaimedBonusEntry struct {
+	UserID int64
+	Amount float64
+}
+
 type UserRepository interface {
 	Create(ctx context.Context, user *User) error
 	// CreateWithEmailAliasGuard 创建用户，并在邮箱唯一性锁内复查"收件箱身份"是否已被占用
@@ -161,6 +167,14 @@ type UserRepository interface {
 	AdjustBalance(ctx context.Context, id int64, delta float64) (BalanceChange, error)
 	// SetBalance 原子地把余额置为 value（value 必须 >= 0），返回变更前后的值。
 	SetBalance(ctx context.Context, id int64, value float64) (BalanceChange, error)
+	// CountReclaimableBonusUsers 统计"从未充值、仅剩注册赠额"的账号数量与余额合计。
+	// 判定条件：role=user 且未软删 且 total_recharged<=0 且 balance>0。
+	// olderThan 非空时仅统计 created_at 早于该时刻的账号（用于赠额到期回收）。
+	CountReclaimableBonusUsers(ctx context.Context, olderThan *time.Time) (int64, float64, error)
+	// ListReclaimableBonusUsers 返回符合上述条件的账号明细，按注册时间升序，最多 limit 条（预览用）。
+	ListReclaimableBonusUsers(ctx context.Context, olderThan *time.Time, limit int) ([]*User, error)
+	// ReclaimBonusBalances 原子地把符合条件账号的余额清零，返回被清零的账号及回收金额。
+	ReclaimBonusBalances(ctx context.Context, olderThan *time.Time) ([]ReclaimedBonusEntry, error)
 	UpdateConcurrency(ctx context.Context, id int64, amount int) error
 	BatchSetConcurrency(ctx context.Context, userIDs []int64, value int) (int, error)
 	BatchAddConcurrency(ctx context.Context, userIDs []int64, delta int) (int, error)

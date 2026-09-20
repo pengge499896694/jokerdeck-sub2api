@@ -601,6 +601,98 @@ func (s *adminServiceImpl) tryAccrueAffiliateRebateForAdminRecharge(ctx context.
 	}
 }
 
+// SignupBonusReclaimSample 预览时展示的单个命中账号（脱敏用不到，仅管理员可见）。
+type SignupBonusReclaimSample struct {
+	UserID    int64     `json:"user_id"`
+	Email     string    `json:"email"`
+	Balance   float64   `json:"balance"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// SignupBonusReclaimPreview 赠额回收预览结果。
+type SignupBonusReclaimPreview struct {
+	Count       int64                      `json:"count"`        // 命中账号总数
+	TotalAmount float64                    `json:"total_amount"` // 将被回收的余额合计
+	Samples     []SignupBonusReclaimSample `json:"samples"`      // 明细样本（最多 100 条）
+}
+
+// SignupBonusReclaimResult 赠额回收执行结果。
+type SignupBonusReclaimResult struct {
+	ReclaimedCount int64   `json:"reclaimed_count"` // 实际清零的账号数
+	TotalAmount    float64 `json:"total_amount"`    // 实际回收的余额合计
+}
+
+const signupBonusReclaimPreviewLimit = 100
+
+// PreviewSignupBonusReclaim 见 AdminService：预览赠额回收影响，只读不改数据。
+func (s *adminServiceImpl) PreviewSignupBonusReclaim(ctx context.Context, olderThan *time.Time) (*SignupBonusReclaimPreview, error) {
+	count, total, err := s.userRepo.CountReclaimableBonusUsers(ctx, olderThan)
+	if err != nil {
+		return nil, err
+	}
+	preview := &SignupBonusReclaimPreview{Count: count, TotalAmount: total, Samples: []SignupBonusReclaimSample{}}
+	if count == 0 {
+		return preview, nil
+	}
+	users, err := s.userRepo.ListReclaimableBonusUsers(ctx, olderThan, signupBonusReclaimPreviewLimit)
+	if err != nil {
+		return nil, err
+	}
+	for _, u := range users {
+		if u == nil {
+			continue
+		}
+		preview.Samples = append(preview.Samples, SignupBonusReclaimSample{
+			UserID:    u.ID,
+			Email:     u.Email,
+			Balance:   u.Balance,
+			CreatedAt: u.CreatedAt,
+		})
+	}
+	return preview, nil
+}
+
+// ExecuteSignupBonusReclaim 见 AdminService：把命中账号余额清零，并失效相关鉴权/计费缓存。
+func (s *adminServiceImpl) ExecuteSignupBonusReclaim(ctx context.Context, olderThan *time.Time) (*SignupBonusReclaimResult, error) {
+	entries, err := s.userRepo.ReclaimBonusBalances(ctx, olderThan)
+	if err != nil {
+		return nil, err
+	}
+	result := &SignupBonusReclaimResult{ReclaimedCount: int64(len(entries))}
+	if len(entries) == 0 {
+		return result, nil
+	}
+	for _, e := range entries {
+		result.TotalAmount += e.Amount
+	}
+
+	// 失效鉴权缓存，使清零后的余额立即在网关生效（否则要等缓存 TTL 自然过期）。
+	if s.authCacheInvalidator != nil {
+		for _, e := range entries {
+			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, e.UserID)
+		}
+	}
+	// 失效计费缓存（后台异步，避免阻塞请求；用独立 context 防止请求结束后被取消）。
+	if s.billingCacheService != nil {
+		ids := make([]int64, len(entries))
+		for i, e := range entries {
+			ids[i] = e.UserID
+		}
+		go func(userIDs []int64) {
+			cacheCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			for _, uid := range userIDs {
+				if err := s.billingCacheService.InvalidateUserBalance(cacheCtx, uid); err != nil {
+					logger.LegacyPrintf("service.admin", "reclaim bonus: invalidate billing cache failed: user_id=%d err=%v", uid, err)
+				}
+			}
+		}(ids)
+	}
+
+	logger.LegacyPrintf("service.admin", "signup bonus reclaimed: count=%d total=%.8f older_than=%v", result.ReclaimedCount, result.TotalAmount, olderThan)
+	return result, nil
+}
+
 func (s *adminServiceImpl) GetUserAPIKeys(ctx context.Context, userID int64, page, pageSize int, sortBy, sortOrder string) ([]APIKey, int64, error) {
 	params := pagination.PaginationParams{Page: page, PageSize: pageSize, SortBy: sortBy, SortOrder: sortOrder}
 	keys, result, err := s.apiKeyRepo.ListByUserID(ctx, userID, params, APIKeyListFilters{})

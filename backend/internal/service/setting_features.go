@@ -332,6 +332,27 @@ func (s *SettingService) GetDefaultUserRPMLimit(ctx context.Context) int {
 	return 0
 }
 
+// GetSignupBonusTTLHours 获取注册赠额有效期（小时）。返回值 <= 0 表示不启用到期回收。
+// 用于后台任务判断：从未充值、仅剩注册赠额的账号在注册满该时长后，赠额将被清零。
+func (s *SettingService) GetSignupBonusTTLHours(ctx context.Context) int {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeySignupBonusTTLHours)
+	if err != nil || value == "" {
+		return 0
+	}
+	if v, err := strconv.Atoi(value); err == nil && v > 0 {
+		return v
+	}
+	return 0
+}
+
+// SetSignupBonusTTLHours 设置注册赠额有效期（小时）。传入 <= 0 表示关闭到期回收。
+func (s *SettingService) SetSignupBonusTTLHours(ctx context.Context, hours int) error {
+	if hours < 0 {
+		hours = 0
+	}
+	return s.settingRepo.Set(ctx, SettingKeySignupBonusTTLHours, strconv.Itoa(hours))
+}
+
 // GetDefaultSubscriptions 获取新用户默认订阅配置列表。
 func (s *SettingService) GetDefaultSubscriptions(ctx context.Context) []DefaultSubscriptionSetting {
 	value, err := s.settingRepo.GetValue(ctx, SettingKeyDefaultSubscriptions)

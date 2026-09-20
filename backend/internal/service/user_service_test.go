@@ -216,6 +216,15 @@ func (m *mockUserRepo) AdjustBalance(ctx context.Context, id int64, delta float6
 	panic("unexpected AdjustBalance call")
 }
 
+func (m *mockUserRepo) CountReclaimableBonusUsers(ctx context.Context, olderThan *time.Time) (int64, float64, error) {
+	return 0, 0, nil
+}
+func (m *mockUserRepo) ListReclaimableBonusUsers(ctx context.Context, olderThan *time.Time, limit int) ([]*User, error) {
+	return nil, nil
+}
+func (m *mockUserRepo) ReclaimBonusBalances(ctx context.Context, olderThan *time.Time) ([]ReclaimedBonusEntry, error) {
+	return nil, nil
+}
 func (m *mockUserRepo) SetBalance(ctx context.Context, id int64, value float64) (BalanceChange, error) {
 	panic("unexpected SetBalance call")
 }

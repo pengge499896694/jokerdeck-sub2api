@@ -98,6 +98,15 @@ func (s *userHandlerRepoStub) AdjustBalance(ctx context.Context, id int64, delta
 	panic("unexpected AdjustBalance call")
 }
 
+func (s *userHandlerRepoStub) CountReclaimableBonusUsers(ctx context.Context, olderThan *time.Time) (int64, float64, error) {
+	return 0, 0, nil
+}
+func (s *userHandlerRepoStub) ListReclaimableBonusUsers(ctx context.Context, olderThan *time.Time, limit int) ([]*service.User, error) {
+	return nil, nil
+}
+func (s *userHandlerRepoStub) ReclaimBonusBalances(ctx context.Context, olderThan *time.Time) ([]service.ReclaimedBonusEntry, error) {
+	return nil, nil
+}
 func (s *userHandlerRepoStub) SetBalance(ctx context.Context, id int64, value float64) (service.BalanceChange, error) {
 	panic("unexpected SetBalance call")
 }

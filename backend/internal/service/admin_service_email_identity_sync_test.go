@@ -121,6 +121,15 @@ func (s *emailSyncRepoStub) AdjustBalance(ctx context.Context, id int64, delta f
 	panic("unexpected AdjustBalance call")
 }
 
+func (s *emailSyncRepoStub) CountReclaimableBonusUsers(ctx context.Context, olderThan *time.Time) (int64, float64, error) {
+	return 0, 0, nil
+}
+func (s *emailSyncRepoStub) ListReclaimableBonusUsers(ctx context.Context, olderThan *time.Time, limit int) ([]*User, error) {
+	return nil, nil
+}
+func (s *emailSyncRepoStub) ReclaimBonusBalances(ctx context.Context, olderThan *time.Time) ([]ReclaimedBonusEntry, error) {
+	return nil, nil
+}
 func (s *emailSyncRepoStub) SetBalance(ctx context.Context, id int64, value float64) (BalanceChange, error) {
 	panic("unexpected SetBalance call")
 }

@@ -312,6 +312,11 @@ func registerUserManagementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	users := admin.Group("/users")
 	{
 		users.GET("", h.Admin.User.List)
+		// 注册赠额回收（僵尸/白嫖号）：先预览再执行；older_than_hours 可选
+		users.GET("/reclaim-bonus/preview", h.Admin.User.PreviewBonusReclaim)
+		users.POST("/reclaim-bonus", h.Admin.User.ExecuteBonusReclaim)
+		users.GET("/signup-bonus-ttl", h.Admin.User.GetSignupBonusTTL)
+		users.PUT("/signup-bonus-ttl", h.Admin.User.UpdateSignupBonusTTL)
 		users.GET("/:id", h.Admin.User.GetByID)
 		users.POST("/:id/auth-identities", h.Admin.User.BindAuthIdentity)
 		users.POST("", h.Admin.User.Create)

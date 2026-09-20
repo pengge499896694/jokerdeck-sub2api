@@ -3352,6 +3352,15 @@ func (r *oauthPendingFlowUserRepo) AdjustBalance(ctx context.Context, id int64, 
 	panic("unexpected AdjustBalance call")
 }
 
+func (r *oauthPendingFlowUserRepo) CountReclaimableBonusUsers(ctx context.Context, olderThan *time.Time) (int64, float64, error) {
+	return 0, 0, nil
+}
+func (r *oauthPendingFlowUserRepo) ListReclaimableBonusUsers(ctx context.Context, olderThan *time.Time, limit int) ([]*service.User, error) {
+	return nil, nil
+}
+func (r *oauthPendingFlowUserRepo) ReclaimBonusBalances(ctx context.Context, olderThan *time.Time) ([]service.ReclaimedBonusEntry, error) {
+	return nil, nil
+}
 func (r *oauthPendingFlowUserRepo) SetBalance(ctx context.Context, id int64, value float64) (service.BalanceChange, error) {
 	panic("unexpected SetBalance call")
 }

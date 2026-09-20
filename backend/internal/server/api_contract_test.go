@@ -1649,6 +1649,15 @@ func (r *stubUserRepo) AdjustBalance(ctx context.Context, id int64, delta float6
 	return service.BalanceChange{}, errors.New("not implemented")
 }
 
+func (r *stubUserRepo) CountReclaimableBonusUsers(ctx context.Context, olderThan *time.Time) (int64, float64, error) {
+	return 0, 0, nil
+}
+func (r *stubUserRepo) ListReclaimableBonusUsers(ctx context.Context, olderThan *time.Time, limit int) ([]*service.User, error) {
+	return nil, nil
+}
+func (r *stubUserRepo) ReclaimBonusBalances(ctx context.Context, olderThan *time.Time) ([]service.ReclaimedBonusEntry, error) {
+	return nil, nil
+}
 func (r *stubUserRepo) SetBalance(ctx context.Context, id int64, value float64) (service.BalanceChange, error) {
 	return service.BalanceChange{}, errors.New("not implemented")
 }

@@ -227,6 +227,12 @@ func (s *stubAdminService) GetUserRPMStatus(ctx context.Context, userID int64) (
 	}, nil
 }
 
+func (s *stubAdminService) PreviewSignupBonusReclaim(ctx context.Context, olderThan *time.Time) (*service.SignupBonusReclaimPreview, error) {
+	return &service.SignupBonusReclaimPreview{}, nil
+}
+func (s *stubAdminService) ExecuteSignupBonusReclaim(ctx context.Context, olderThan *time.Time) (*service.SignupBonusReclaimResult, error) {
+	return &service.SignupBonusReclaimResult{}, nil
+}
 func (s *stubAdminService) BindUserAuthIdentity(ctx context.Context, userID int64, input service.AdminBindAuthIdentityInput) (*service.AdminBoundAuthIdentity, error) {
 	s.boundAuthIdentityFor = userID
 	copied := input

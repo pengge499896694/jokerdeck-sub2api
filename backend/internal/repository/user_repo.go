@@ -990,6 +990,94 @@ func (r *userRepository) SetBalance(ctx context.Context, id int64, value float64
 	return change, nil
 }
 
+// CountReclaimableBonusUsers 见 service.UserRepository：统计仅剩注册赠额、从未充值的账号。
+func (r *userRepository) CountReclaimableBonusUsers(ctx context.Context, olderThan *time.Time) (int64, float64, error) {
+	query := `SELECT COUNT(*), COALESCE(SUM(balance), 0)
+		FROM users
+		WHERE role = $1 AND deleted_at IS NULL AND total_recharged <= 0 AND balance > 0`
+	args := []any{service.RoleUser}
+	if olderThan != nil {
+		query += ` AND created_at < $2`
+		args = append(args, olderThan.UTC())
+	}
+	rows, err := clientFromContext(ctx, r.client).QueryContext(ctx, query, args...)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer func() { _ = rows.Close() }()
+	var (
+		count int64
+		total float64
+	)
+	if rows.Next() {
+		if err := rows.Scan(&count, &total); err != nil {
+			return 0, 0, err
+		}
+	}
+	return count, total, rows.Err()
+}
+
+// ListReclaimableBonusUsers 见 service.UserRepository：按注册时间升序返回可回收账号明细（预览用）。
+func (r *userRepository) ListReclaimableBonusUsers(ctx context.Context, olderThan *time.Time, limit int) ([]*service.User, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	q := clientFromContext(ctx, r.client).User.Query().Where(
+		dbuser.RoleEQ(service.RoleUser),
+		dbuser.TotalRechargedLTE(0),
+		dbuser.BalanceGT(0),
+	)
+	if olderThan != nil {
+		q = q.Where(dbuser.CreatedAtLT(olderThan.UTC()))
+	}
+	ms, err := q.Order(dbent.Asc(dbuser.FieldCreatedAt)).Limit(limit).All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*service.User, 0, len(ms))
+	for _, m := range ms {
+		out = append(out, userEntityToService(m))
+	}
+	return out, nil
+}
+
+// ReclaimBonusBalances 见 service.UserRepository：原子地把可回收账号的余额清零并返回回收明细。
+// 用 FOR UPDATE SKIP LOCKED 避免与并发的计费/充值写操作互相阻塞，且天然幂等（余额为 0 后不再命中）。
+func (r *userRepository) ReclaimBonusBalances(ctx context.Context, olderThan *time.Time) ([]service.ReclaimedBonusEntry, error) {
+	query := `
+		WITH victims AS (
+			SELECT id, balance
+			FROM users
+			WHERE role = $1 AND deleted_at IS NULL AND total_recharged <= 0 AND balance > 0`
+	args := []any{service.RoleUser}
+	if olderThan != nil {
+		query += ` AND created_at < $2`
+		args = append(args, olderThan.UTC())
+	}
+	query += `
+			FOR UPDATE SKIP LOCKED
+		)
+		UPDATE users AS u
+		SET balance = 0, updated_at = NOW()
+		FROM victims AS v
+		WHERE u.id = v.id
+		RETURNING u.id, v.balance`
+	rows, err := clientFromContext(ctx, r.client).QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	entries := make([]service.ReclaimedBonusEntry, 0)
+	for rows.Next() {
+		var e service.ReclaimedBonusEntry
+		if err := rows.Scan(&e.UserID, &e.Amount); err != nil {
+			return nil, err
+		}
+		entries = append(entries, e)
+	}
+	return entries, rows.Err()
+}
+
 // currentBalance 读取用户当前余额，用户不存在时返回 ErrUserNotFound。
 func (r *userRepository) currentBalance(ctx context.Context, id int64) (balance float64, err error) {
 	rows, err := clientFromContext(ctx, r.client).QueryContext(ctx,

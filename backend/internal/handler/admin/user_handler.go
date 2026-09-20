@@ -385,6 +385,90 @@ func (h *UserHandler) Delete(c *gin.Context) {
 	response.Success(c, gin.H{"message": "User deleted successfully"})
 }
 
+// parseReclaimOlderThan 解析可选的 older_than_hours 查询参数：
+// 传入且 > 0 时，仅处理注册满该小时数的账号；缺省/<=0 表示处理所有未充值赠额账号。
+func parseReclaimOlderThan(c *gin.Context) (*time.Time, error) {
+	raw := strings.TrimSpace(c.Query("older_than_hours"))
+	if raw == "" {
+		return nil, nil
+	}
+	hours, err := strconv.Atoi(raw)
+	if err != nil {
+		return nil, fmt.Errorf("invalid older_than_hours")
+	}
+	if hours <= 0 {
+		return nil, nil
+	}
+	cutoff := time.Now().Add(-time.Duration(hours) * time.Hour)
+	return &cutoff, nil
+}
+
+// PreviewBonusReclaim 预览注册赠额回收影响（只读）。
+// GET /api/v1/admin/users/reclaim-bonus/preview?older_than_hours=24
+func (h *UserHandler) PreviewBonusReclaim(c *gin.Context) {
+	olderThan, err := parseReclaimOlderThan(c)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	preview, err := h.adminService.PreviewSignupBonusReclaim(c.Request.Context(), olderThan)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, preview)
+}
+
+// ExecuteBonusReclaim 执行注册赠额回收，把命中账号余额清零。
+// POST /api/v1/admin/users/reclaim-bonus?older_than_hours=24
+func (h *UserHandler) ExecuteBonusReclaim(c *gin.Context) {
+	olderThan, err := parseReclaimOlderThan(c)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	result, err := h.adminService.ExecuteSignupBonusReclaim(c.Request.Context(), olderThan)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, result)
+}
+
+// GetSignupBonusTTL 获取注册赠额有效期设置（小时，0 = 关闭到期回收）。
+// GET /api/v1/admin/users/signup-bonus-ttl
+func (h *UserHandler) GetSignupBonusTTL(c *gin.Context) {
+	hours := 0
+	if h.settingService != nil {
+		hours = h.settingService.GetSignupBonusTTLHours(c.Request.Context())
+	}
+	response.Success(c, gin.H{"ttl_hours": hours})
+}
+
+// UpdateSignupBonusTTLRequest 更新注册赠额有效期请求。
+type UpdateSignupBonusTTLRequest struct {
+	TTLHours int `json:"ttl_hours"`
+}
+
+// UpdateSignupBonusTTL 设置注册赠额有效期（小时，<=0 关闭到期回收）。
+// PUT /api/v1/admin/users/signup-bonus-ttl
+func (h *UserHandler) UpdateSignupBonusTTL(c *gin.Context) {
+	if h.settingService == nil {
+		response.ErrorFrom(c, service.ErrServiceUnavailable)
+		return
+	}
+	var req UpdateSignupBonusTTLRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if err := h.settingService.SetSignupBonusTTLHours(c.Request.Context(), req.TTLHours); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.Success(c, gin.H{"ttl_hours": h.settingService.GetSignupBonusTTLHours(c.Request.Context())})
+}
+
 // UpdateBalance handles updating user balance
 // POST /api/v1/admin/users/:id/balance
 func (h *UserHandler) UpdateBalance(c *gin.Context) {

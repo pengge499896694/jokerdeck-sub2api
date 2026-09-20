@@ -399,6 +399,63 @@ export async function resetPlatformQuotaWindow(
   return data
 }
 
+// ---- 注册赠额回收（僵尸/白嫖号）----
+
+export interface BonusReclaimSample {
+  user_id: number
+  email: string
+  balance: number
+  created_at: string
+}
+
+export interface BonusReclaimPreview {
+  count: number
+  total_amount: number
+  samples: BonusReclaimSample[]
+}
+
+export interface BonusReclaimResult {
+  reclaimed_count: number
+  total_amount: number
+}
+
+/**
+ * 预览注册赠额回收影响（只读）。
+ * @param olderThanHours 可选：仅统计注册满该小时数的账号；缺省表示所有未充值赠额账号
+ */
+export async function previewBonusReclaim(olderThanHours?: number): Promise<BonusReclaimPreview> {
+  const params: Record<string, any> = {}
+  if (olderThanHours && olderThanHours > 0) params.older_than_hours = olderThanHours
+  const { data } = await apiClient.get<BonusReclaimPreview>('/admin/users/reclaim-bonus/preview', {
+    params
+  })
+  return data
+}
+
+/** 执行注册赠额回收，把命中账号余额清零。 */
+export async function executeBonusReclaim(olderThanHours?: number): Promise<BonusReclaimResult> {
+  const params: Record<string, any> = {}
+  if (olderThanHours && olderThanHours > 0) params.older_than_hours = olderThanHours
+  const { data } = await apiClient.post<BonusReclaimResult>('/admin/users/reclaim-bonus', null, {
+    params
+  })
+  return data
+}
+
+/** 获取注册赠额有效期（小时，0 = 关闭到期回收）。 */
+export async function getSignupBonusTTL(): Promise<{ ttl_hours: number }> {
+  const { data } = await apiClient.get<{ ttl_hours: number }>('/admin/users/signup-bonus-ttl')
+  return data
+}
+
+/** 设置注册赠额有效期（小时，<=0 关闭到期回收）。 */
+export async function updateSignupBonusTTL(ttlHours: number): Promise<{ ttl_hours: number }> {
+  const { data } = await apiClient.put<{ ttl_hours: number }>('/admin/users/signup-bonus-ttl', {
+    ttl_hours: ttlHours
+  })
+  return data
+}
+
 export const usersAPI = {
   list,
   getById,
@@ -417,6 +474,10 @@ export const usersAPI = {
   getPlatformQuotas,
   updatePlatformQuotas,
   resetPlatformQuotaWindow,
+  previewBonusReclaim,
+  executeBonusReclaim,
+  getSignupBonusTTL,
+  updateSignupBonusTTL,
 }
 
 export default usersAPI

@@ -30,6 +30,11 @@ type AdminService interface {
 	// Also returns totalRecharged (sum of all positive balance top-ups).
 	GetUserBalanceHistory(ctx context.Context, userID int64, page, pageSize int, codeType string) ([]RedeemCode, int64, float64, error)
 	BindUserAuthIdentity(ctx context.Context, userID int64, input AdminBindAuthIdentityInput) (*AdminBoundAuthIdentity, error)
+	// PreviewSignupBonusReclaim 预览"从未充值、仅剩注册赠额"账号的回收影响（不改数据）。
+	// olderThan 非空时仅统计 created_at 早于该时刻的账号。
+	PreviewSignupBonusReclaim(ctx context.Context, olderThan *time.Time) (*SignupBonusReclaimPreview, error)
+	// ExecuteSignupBonusReclaim 执行赠额回收：把命中账号余额清零，返回回收结果。
+	ExecuteSignupBonusReclaim(ctx context.Context, olderThan *time.Time) (*SignupBonusReclaimResult, error)
 
 	// Group management
 	ListGroups(ctx context.Context, page, pageSize int, platform, status, search string, isExclusive *bool, sortBy, sortOrder string) ([]Group, int64, error)

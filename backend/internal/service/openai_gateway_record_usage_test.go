@@ -158,6 +158,15 @@ func (s *openAIRecordUsageUserRepoStub) AdjustBalance(ctx context.Context, id in
 	panic("unexpected AdjustBalance call")
 }
 
+func (s *openAIRecordUsageUserRepoStub) CountReclaimableBonusUsers(ctx context.Context, olderThan *time.Time) (int64, float64, error) {
+	return 0, 0, nil
+}
+func (s *openAIRecordUsageUserRepoStub) ListReclaimableBonusUsers(ctx context.Context, olderThan *time.Time, limit int) ([]*User, error) {
+	return nil, nil
+}
+func (s *openAIRecordUsageUserRepoStub) ReclaimBonusBalances(ctx context.Context, olderThan *time.Time) ([]ReclaimedBonusEntry, error) {
+	return nil, nil
+}
 func (s *openAIRecordUsageUserRepoStub) SetBalance(ctx context.Context, id int64, value float64) (BalanceChange, error) {
 	panic("unexpected SetBalance call")
 }
