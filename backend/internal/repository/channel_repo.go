@@ -333,7 +333,10 @@ func (r *channelRepository) ListAll(ctx context.Context) ([]service.Channel, err
 	}
 
 	if len(channelIDs) == 0 {
-		return channels, nil
+		// Legacy installations (pre-channel schema) store provider entries in
+		// accounts. Keep model plaza and model discovery compatible during the
+		// 0.2.7 upgrade without mutating production data.
+		return r.listLegacyAccountChannels(ctx)
 	}
 
 	// 批量加载分组 ID
@@ -360,6 +363,67 @@ func (r *channelRepository) ListAll(ctx context.Context) ([]service.Channel, err
 		channels[i].AccountStatsPricingRules = statsRulesMap[channels[i].ID]
 	}
 
+	return channels, nil
+}
+
+func (r *channelRepository) listLegacyAccountChannels(ctx context.Context) ([]service.Channel, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT a.id, a.name, a.platform, a.status, COALESCE(a.credentials, '{}'::jsonb)::text
+		FROM accounts a
+		WHERE a.deleted_at IS NULL AND a.status = $1
+		ORDER BY a.id`, service.StatusActive)
+	if err != nil {
+		return nil, fmt.Errorf("query legacy account channels: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	channels := make([]service.Channel, 0)
+	for rows.Next() {
+		var ch service.Channel
+		var platform string
+		var credentialsJSON string
+		if err := rows.Scan(&ch.ID, &ch.Name, &platform, &ch.Status, &credentialsJSON); err != nil {
+			return nil, fmt.Errorf("scan legacy account channel: %w", err)
+		}
+		var credentials map[string]any
+		if err := json.Unmarshal([]byte(credentialsJSON), &credentials); err != nil {
+			return nil, fmt.Errorf("decode legacy account credentials: %w", err)
+		}
+		mapping := make(map[string]string)
+		if raw, ok := credentials["model_mapping"].(map[string]any); ok {
+			for model, target := range raw {
+				if value, ok := target.(string); ok {
+					mapping[model] = value
+				}
+			}
+		}
+		if len(mapping) > 0 {
+			// Legacy account mappings are stored as model -> upstream model;
+			// Channel mappings are grouped by the account platform.
+			ch.ModelMapping = map[string]map[string]string{platform: mapping}
+		}
+		groupRows, err := r.db.QueryContext(ctx, `SELECT group_id FROM account_groups WHERE account_id = $1 ORDER BY group_id`, ch.ID)
+		if err != nil {
+			return nil, fmt.Errorf("query legacy account groups: %w", err)
+		}
+		for groupRows.Next() {
+			var groupID int64
+			if err := groupRows.Scan(&groupID); err != nil {
+				_ = groupRows.Close()
+				return nil, fmt.Errorf("scan legacy account group: %w", err)
+			}
+			ch.GroupIDs = append(ch.GroupIDs, groupID)
+		}
+		if err := groupRows.Err(); err != nil {
+			_ = groupRows.Close()
+			return nil, fmt.Errorf("iterate legacy account groups: %w", err)
+		}
+		_ = groupRows.Close()
+		channels = append(channels, ch)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate legacy account channels: %w", err)
+	}
 	return channels, nil
 }
 

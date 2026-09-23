@@ -497,20 +497,8 @@ export default {
       description: '管理用户账户和权限',
       createUser: '创建用户',
       bonusReclaim: {
-        action: '回收不活跃余额',
-        title: '回收不活跃用户余额',
-        desc: '固定规则：仅回收余额大于 $0.30、最近 30 天无使用记录、且没有正数管理员充值记录的普通用户。自己兑换过余额不再被排除。先预览并勾选排除误伤用户，再手动执行；部署不会自动回收。每批执行后可回滚。',
-        preview: '预览',
-        excludeHint: '勾选要保留的用户：已排除 {count} 个',
-        rollback: '回滚本批次',
-        rollbackConfirm: '确定回滚最近一次回收批次吗？',
-        rollbackDone: '回收批次已回滚',
-        hitCount: '命中账号数',
-        totalAmount: '将回收余额合计',
-        sampleTruncated: '仅显示前 {shown} 条，共 {total} 条',
-        execute: '执行回收（{count}）',
-        confirm: '确定把 {count} 个账号的余额清零吗？合计回收 ${amount}。账号不会被删除，用户可重新充值使用。',
-        done: '已回收 {count} 个不活跃账号的余额，合计 ${amount}'
+        title: '系统公告',
+        desc: '系统新增定时清理不活跃账号功能：针对未充值用户，注册赠送的体验余额仅限 24 小时内使用，超时后自动清空剩余赠送额度。现有不活跃账号余额由管理员手动维护。',
       },
       bulkDelete: {
         action: '批量删除（{count}）',
@@ -1155,8 +1143,9 @@ export default {
         sumTooHigh: '最低毛利率与安全缓冲之和必须小于 100%，否则将排除全部账号'
       },
       modelAllowlist: {
-        title: '模型白名单',
-        hint: '开启后，不在白名单中的模型会被拒绝（404 model_not_found），模型列表接口也只展示白名单内的模型。条目支持精确模型 ID 与末尾 * 通配。注意：Claude Code 会用 haiku 系小模型做标题/摘要等探测，/messages/count_tokens 同样受白名单控制，请一并勾选所需的小模型。',
+        refresh: '拉取最新模型',
+        title: '模型管理 / 模型白名单',
+        hint: '可拉取最新模型并取消勾选不可用模型；保存后模型广场会同步更新。',
         loading: '正在加载候选模型...',
         empty: '暂无候选模型，可在下方手工添加条目',
         selectedSummary: '已选 {selected} / {total}',

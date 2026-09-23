@@ -497,20 +497,8 @@ export default {
       description: 'Manage users and their permissions',
       createUser: 'Create User',
       bonusReclaim: {
-        action: 'Reclaim inactive balances',
-        title: 'Reclaim inactive user balances',
-        desc: 'Fixed rule: regular users with a balance above $0.30, no usage in the last 30 days, and no positive administrator balance adjustment are eligible. Self-redeemed balances are allowed. Preview first, exclude possible false positives, then execute manually; deployment never reclaims automatically. Each batch can be rolled back.',
-        preview: 'Preview',
-        excludeHint: 'Checked users are kept: {count} excluded',
-        rollback: 'Rollback batch',
-        rollbackConfirm: 'Rollback the most recent reclaim batch?',
-        rollbackDone: 'Reclaim batch rolled back',
-        hitCount: 'Matched accounts',
-        totalAmount: 'Total to reclaim',
-        sampleTruncated: 'Showing first {shown} of {total}',
-        execute: 'Reclaim ({count})',
-        confirm: 'Zero out the balance of {count} accounts? Reclaiming ${amount} in total. Accounts are not deleted; users can recharge to continue.',
-        done: 'Reclaimed balances from {count} inactive accounts, ${amount} total'
+        title: 'System Notice',
+        desc: 'Scheduled cleanup is enabled for inactive accounts. Users without recharge records can use the signup trial balance for 24 hours; any remaining gifted balance is cleared after expiry. Existing inactive-account balances are maintained manually by administrators.',
       },
       bulkDelete: {
         action: 'Delete selected ({count})',
@@ -1158,8 +1146,9 @@ export default {
         sumTooHigh: 'Min gross margin plus safety buffer must be less than 100%, otherwise every account would be excluded'
       },
       modelAllowlist: {
-        title: 'Model Allowlist',
-        hint: 'When enabled, models outside the allowlist are rejected with 404 model_not_found, and model listing endpoints only show allowlisted models. Entries support exact model IDs and trailing * wildcards. Note: Claude Code probes with haiku-family models for titles/summaries and /messages/count_tokens is also allowlist-controlled, so make sure the small models you need are selected too.',
+        refresh: 'Pull latest models',
+        title: 'Model Management / Allowlist',
+        hint: 'Pull the latest models and uncheck unavailable models; saving updates the model plaza.',
         loading: 'Loading candidate models...',
         empty: 'No candidate models; add custom entries below',
         selectedSummary: 'Selected {selected} / {total}',

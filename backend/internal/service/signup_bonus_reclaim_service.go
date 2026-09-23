@@ -13,31 +13,38 @@ type signupBonusReclaimer interface {
 }
 
 // signupBonusTTLProvider 提供当前配置的注册赠额有效期（小时，<=0 表示关闭）。
-type signupBonusTTLProvider interface {
-	GetSignupBonusTTLHours(ctx context.Context) int
-}
-
-// SignupBonusReclaimService 周期性回收连续 30 天未使用且无充值记录的账号余额。
+// SignupBonusReclaimService 周期性回收注册超过24小时且无充值记录的账号余额。
 type SignupBonusReclaimService struct {
 	reclaimer signupBonusReclaimer
-	ttl       signupBonusTTLProvider
 	interval  time.Duration
 	stopCh    chan struct{}
 	stopOnce  sync.Once
 	wg        sync.WaitGroup
 }
 
-func NewSignupBonusReclaimService(reclaimer signupBonusReclaimer, ttl signupBonusTTLProvider, interval time.Duration) *SignupBonusReclaimService {
+func NewSignupBonusReclaimService(reclaimer signupBonusReclaimer, interval time.Duration) *SignupBonusReclaimService {
 	return &SignupBonusReclaimService{
 		reclaimer: reclaimer,
-		ttl:       ttl,
 		interval:  interval,
 		stopCh:    make(chan struct{}),
 	}
 }
 
 func (s *SignupBonusReclaimService) Start() {
-	// Manual-only: never reclaim balances immediately after deployment.
+	if s == nil || s.interval <= 0 { return }
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.runOnce()
+		ticker := time.NewTicker(s.interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C: s.runOnce()
+			case <-s.stopCh: return
+			}
+		}
+	}()
 }
 
 func (s *SignupBonusReclaimService) Stop() {
@@ -54,12 +61,13 @@ func (s *SignupBonusReclaimService) runOnce() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	result, err := s.reclaimer.ExecuteSignupBonusReclaim(ctx, nil)
+	cutoff := time.Now().UTC().Add(-24 * time.Hour)
+	result, err := s.reclaimer.ExecuteSignupBonusReclaim(ctx, &cutoff)
 	if err != nil {
 		log.Printf("[SignupBonusReclaim] reclaim failed: %v", err)
 		return
 	}
 	if result != nil && result.ReclaimedCount > 0 {
-		log.Printf("[InactiveBalanceReclaim] reclaimed %d accounts, total=%.8f (inactive_days=30)", result.ReclaimedCount, result.TotalAmount)
+		log.Printf("[SignupBonusReclaim] reclaimed %d accounts, total=%.8f (ttl_hours=24)", result.ReclaimedCount, result.TotalAmount)
 	}
 }

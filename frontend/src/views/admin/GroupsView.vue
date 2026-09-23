@@ -778,7 +778,17 @@
                 {{ t("admin.groups.modelAllowlist.hint") }}
               </p>
             </div>
-            <Toggle v-model="createModelAllowlistState.enabled" />
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                class="rounded px-2 py-1 text-xs font-medium text-primary-600 hover:bg-primary-50 disabled:opacity-50 dark:text-primary-400 dark:hover:bg-primary-900/20"
+                :disabled="createModelAllowlistLoading"
+                @click="createModelAllowlistState.enabled = true; loadModelAllowlistCandidates('create', 0, createForm.platform)"
+              >
+                {{ t("admin.groups.modelAllowlist.refresh") }}
+              </button>
+              <Toggle v-model="createModelAllowlistState.enabled" />
+            </div>
           </div>
           <div
             v-if="createModelAllowlistState.enabled"
@@ -2418,7 +2428,17 @@
                 {{ t("admin.groups.modelAllowlist.hint") }}
               </p>
             </div>
-            <Toggle v-model="editModelAllowlistState.enabled" />
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                class="rounded px-2 py-1 text-xs font-medium text-primary-600 hover:bg-primary-50 disabled:opacity-50 dark:text-primary-400 dark:hover:bg-primary-900/20"
+                :disabled="editModelAllowlistLoading"
+                @click="editModelAllowlistState.enabled = true; loadModelAllowlistCandidates('edit', editingGroup?.id ?? 0, editForm.platform)"
+              >
+                {{ t("admin.groups.modelAllowlist.refresh") }}
+              </button>
+              <Toggle v-model="editModelAllowlistState.enabled" />
+            </div>
           </div>
           <div
             v-if="editModelAllowlistState.enabled"

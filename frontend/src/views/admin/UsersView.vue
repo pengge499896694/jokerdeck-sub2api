@@ -263,16 +263,6 @@
               {{ t('admin.users.bulkDelete.action', { count: selectedCount }) }}
             </button>
 
-            <!-- 回收注册赠额（僵尸/白嫖号） -->
-            <button
-              @click="openBonusReclaim"
-              class="btn btn-secondary flex-1 md:flex-initial"
-              :title="t('admin.users.bonusReclaim.action')"
-            >
-              <Icon name="trash" size="md" class="md:mr-2" />
-              <span class="hidden md:inline">{{ t('admin.users.bonusReclaim.action') }}</span>
-            </button>
-
             <!-- Create User Button (full width on mobile, auto width on desktop) -->
             <button @click="showCreateModal = true" class="btn btn-primary flex-1 md:flex-initial">
               <Icon name="plus" size="md" class="mr-2" />
@@ -798,7 +788,6 @@
     <UserBalanceHistoryModal :show="showBalanceHistoryModal" :user="balanceHistoryUser" @close="closeBalanceHistoryModal" @deposit="handleDepositFromHistory" @withdraw="handleWithdrawFromHistory" />
     <GroupReplaceModal :show="showGroupReplaceModal" :user="groupReplaceUser" :old-group="groupReplaceOldGroup" :all-groups="allGroups" @close="closeGroupReplaceModal" @success="loadUsers" />
     <UserAttributesConfigModal :show="showAttributesModal" @close="handleAttributesModalClose" />
-    <BonusReclaimModal :show="showBonusReclaimModal" @close="showBonusReclaimModal = false" @success="loadUsers" />
   </AppLayout>
 </template>
 
@@ -835,7 +824,6 @@ import UserPlatformQuotaCell from '@/components/user/UserPlatformQuotaCell.vue'
 import UserCreateModal from '@/components/admin/user/UserCreateModal.vue'
 import UserEditModal from '@/components/admin/user/UserEditModal.vue'
 import BulkEditUserModal from '@/components/admin/user/BulkEditUserModal.vue'
-import BonusReclaimModal from '@/components/admin/user/BonusReclaimModal.vue'
 import UserPlatformQuotaModal from '@/components/admin/user/UserPlatformQuotaModal.vue'
 import UserApiKeysModal from '@/components/admin/user/UserApiKeysModal.vue'
 import UserAllowedGroupsModal from '@/components/admin/user/UserAllowedGroupsModal.vue'
@@ -1359,8 +1347,6 @@ const bulkDeleteIds = ref<number[]>([])
 const bulkDeleting = ref(false)
 const showApiKeysModal = ref(false)
 const showAttributesModal = ref(false)
-const showBonusReclaimModal = ref(false)
-const openBonusReclaim = () => { showBonusReclaimModal.value = true }
 const showPlatformQuotaModal = ref(false)
 const editingUser = ref<AdminUser | null>(null)
 const deletingUser = ref<AdminUser | null>(null)

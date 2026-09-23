@@ -178,7 +178,7 @@ type UserRepository interface {
 	AdjustBalance(ctx context.Context, id int64, delta float64) (BalanceChange, error)
 	// SetBalance 原子地把余额置为 value（value 必须 >= 0），返回变更前后的值。
 	SetBalance(ctx context.Context, id int64, value float64) (BalanceChange, error)
-	// CountReclaimableBonusUsers 统计余额达到阈值且最近未使用的非充值用户。
+	// CountReclaimableBonusUsers 统计有余额、最近未使用且从未充值的用户。
 	CountReclaimableBonusUsers(ctx context.Context, olderThan *time.Time) (int64, float64, error)
 	// ListReclaimableBonusUsers 返回符合上述条件的账号明细，按注册时间升序，最多 limit 条（预览用）。
 	ListReclaimableBonusUsers(ctx context.Context, olderThan *time.Time, limit int) ([]*User, error)
@@ -207,9 +207,10 @@ type UserRepository interface {
 }
 
 const (
-	InactiveBalanceReclaimMinimum = 0.3
+	// Any positive remaining balance is reclaimable; there is no $0.30 floor.
+	InactiveBalanceReclaimMinimum = 0.0
 	InactiveBalanceReclaimWindow  = 30 * 24 * time.Hour
-	InactiveBalanceReclaimNote    = "inactive balance reclaim; minimum=0.30; inactive_days=30; refund on request"
+	InactiveBalanceReclaimNote    = "inactive gifted balance reclaim; no_recharge; balance>0; inactive_days=30; refund on request"
 )
 
 // RegistrationEmailDomainRepository 是生产用户仓储为非白名单域名单账户兜底策略提供的可选能力。

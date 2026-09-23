@@ -446,9 +446,9 @@ func ProvideSubscriptionExpiryService(userSubRepo UserSubscriptionRepository, se
 }
 
 // ProvideSignupBonusReclaimService creates and starts SignupBonusReclaimService.
-// 每 30 分钟扫描一次；仅当 signup_bonus_ttl_hours > 0 时才实际回收。
+// 每 30 分钟扫描一次，固定回收注册超过24小时且未充值账号的剩余赠额。
 func ProvideSignupBonusReclaimService(adminService AdminService, settingService *SettingService) *SignupBonusReclaimService {
-	svc := NewSignupBonusReclaimService(adminService, settingService, 30*time.Minute)
+	svc := NewSignupBonusReclaimService(adminService, 30*time.Minute)
 	svc.Start()
 	return svc
 }
