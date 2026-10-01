@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
+	financeHandler "github.com/Wei-Shaw/sub2api/internal/handler/finance"
 	"github.com/Wei-Shaw/sub2api/internal/securityaudit"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -16,6 +17,7 @@ func ProvideAdminHandlers(
 	groupHandler *admin.GroupHandler,
 	accountHandler *admin.AccountHandler,
 	announcementHandler *admin.AnnouncementHandler,
+	feedbackHandler *admin.FeedbackHandler,
 	dataManagementHandler *admin.DataManagementHandler,
 	backupHandler *admin.BackupHandler,
 	oauthHandler *admin.OAuthHandler,
@@ -61,6 +63,7 @@ func ProvideAdminHandlers(
 		Group:                  groupHandler,
 		Account:                accountHandler,
 		Announcement:           announcementHandler,
+		Feedback:               feedbackHandler,
 		DataManagement:         dataManagementHandler,
 		Backup:                 backupHandler,
 		OAuth:                  oauthHandler,
@@ -189,6 +192,8 @@ func ProvideHandlers(
 	redeemHandler *RedeemHandler,
 	subscriptionHandler *SubscriptionHandler,
 	announcementHandler *AnnouncementHandler,
+	feedbackHandler *FeedbackHandler,
+	financeHandlerInstance *financeHandler.Handler,
 	channelMonitorUserHandler *ChannelMonitorUserHandler,
 	channelMonitorV2Handler *ChannelMonitorV2Handler,
 	adminHandlers *AdminHandlers,
@@ -216,6 +221,8 @@ func ProvideHandlers(
 		Redeem:           redeemHandler,
 		Subscription:     subscriptionHandler,
 		Announcement:     announcementHandler,
+		Feedback:         feedbackHandler,
+		Finance:          financeHandlerInstance,
 		ChannelMonitor:   channelMonitorUserHandler,
 		ChannelMonitorV2: channelMonitorV2Handler,
 		Admin:            adminHandlers,
@@ -244,6 +251,8 @@ var ProviderSet = wire.NewSet(
 	NewRedeemHandler,
 	NewSubscriptionHandler,
 	NewAnnouncementHandler,
+	NewFeedbackHandler,
+	financeHandler.NewHandler,
 	NewChannelMonitorUserHandler,
 	NewChannelMonitorV2Handler,
 	ProvideGatewayHandler,
@@ -265,6 +274,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewGroupHandlerWithConfig,
 	admin.ProvideAccountHandler,
 	ProvideAdminAnnouncementHandler,
+	admin.NewFeedbackHandler,
 	admin.NewDataManagementHandler,
 	admin.NewBackupHandler,
 	admin.NewOAuthHandler,

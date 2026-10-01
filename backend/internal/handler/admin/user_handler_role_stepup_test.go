@@ -84,3 +84,19 @@ func TestCreateRegularUserSkipsStepUp(t *testing.T) {
 	})
 	require.Equal(t, http.StatusOK, rec.Code)
 }
+
+func TestCreateFinanceUserSkipsStepUp(t *testing.T) {
+	router, _ := setupRoleStepUpRouter(t)
+
+	rec := doJSON(t, router, http.MethodPost, "/api/v1/admin/users", map[string]any{
+		"email": "finance@example.com", "password": "pass123", "role": "finance",
+	})
+	require.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestUpdateUserToFinanceSkipsStepUp(t *testing.T) {
+	router, _ := setupRoleStepUpRouter(t)
+
+	rec := doJSON(t, router, http.MethodPut, "/api/v1/admin/users/1", map[string]any{"role": "finance"})
+	require.Equal(t, http.StatusOK, rec.Code)
+}

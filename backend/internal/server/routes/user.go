@@ -119,6 +119,15 @@ func RegisterUserRoutes(
 			announcements.POST("/:id/read", h.Announcement.MarkRead)
 		}
 
+		feedback := authenticated.Group("/feedback")
+		{
+			feedback.GET("/tickets", h.Feedback.List)
+			feedback.POST("/tickets", h.Feedback.Create)
+			feedback.GET("/tickets/:id", h.Feedback.Get)
+			feedback.POST("/tickets/:id/messages", h.Feedback.Reply)
+			feedback.POST("/tickets/:id/close", h.Feedback.Close)
+		}
+
 		// 卡密兑换
 		redeem := authenticated.Group("/redeem")
 		{

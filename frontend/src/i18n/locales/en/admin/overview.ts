@@ -745,6 +745,7 @@ export default {
       totalRecharged: 'Total Recharged',
       roles: {
         admin: 'Admin',
+        finance: 'Finance',
         user: 'User'
       },
       // Settings Dropdowns

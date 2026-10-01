@@ -14,6 +14,8 @@ type OptionalJWTAuthMiddleware gin.HandlerFunc
 // AdminAuthMiddleware 管理员认证中间件类型
 type AdminAuthMiddleware gin.HandlerFunc
 
+type FinanceAuthMiddleware gin.HandlerFunc
+
 // APIKeyAuthMiddleware API Key 认证中间件类型
 type APIKeyAuthMiddleware gin.HandlerFunc
 
@@ -22,6 +24,7 @@ var ProviderSet = wire.NewSet(
 	NewJWTAuthMiddleware,
 	NewOptionalJWTAuthMiddleware,
 	NewAdminAuthMiddleware,
+	NewFinanceAuthMiddleware,
 	NewAPIKeyAuthMiddleware,
 	NewAuditLogMiddleware,
 	NewStepUpAuthMiddleware,

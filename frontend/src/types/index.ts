@@ -84,7 +84,7 @@ export interface User {
   linuxdo_bound?: boolean
   oidc_bound?: boolean
   wechat_bound?: boolean
-  role: 'admin' | 'user' // User role for authorization
+  role: 'admin' | 'finance' | 'user' // User role for authorization
   balance: number // User balance for API usage
   frozen_balance?: number // Balance currently held by async batch jobs
   concurrency: number // Allowed concurrent requests
@@ -2159,6 +2159,8 @@ export interface UserErrorRequest {
   id: number
   created_at: string
   model: string
+  request_id?: string
+  error_code?: string
   inbound_endpoint: string
   status_code: number
   category: string

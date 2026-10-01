@@ -318,6 +318,13 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/balance-notifications',
+    name: 'BalanceNotifications',
+    component: () => import('@/views/user/BalanceNotificationsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, title: '余额邮箱提醒' }
+  },
+  { path: '/feedback', name: 'Feedback', component: () => import('@/views/user/FeedbackView.vue'), meta: { requiresAuth: true, title: 'Feedback' } },
+  {
     path: '/subscriptions',
     name: 'Subscriptions',
     component: () => import('@/views/user/SubscriptionsView.vue'),
@@ -423,6 +430,18 @@ const routes: RouteRecordRaw[] = [
       requiresAdmin: false,
       title: 'Custom Page',
       titleKey: 'customPage.title',
+    }
+  },
+
+  {
+    path: '/finance',
+    name: 'Finance',
+    component: () => import('@/views/finance/FinanceView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresFinance: true,
+      title: 'Finance Center',
+      titleKey: 'nav.finance'
     }
   },
 
@@ -578,6 +597,7 @@ const routes: RouteRecordRaw[] = [
       descriptionKey: 'admin.announcements.description'
     }
   },
+  { path: '/admin/feedback', name: 'AdminFeedback', component: () => import('@/views/admin/FeedbackView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: 'Feedback Tickets' } },
   {
     path: '/admin/proxies',
     name: 'AdminProxies',
@@ -846,6 +866,7 @@ router.beforeEach(async (to, _from, next) => {
   // Check if route requires authentication
   const requiresAuth = to.meta.requiresAuth !== false // Default to true
   const requiresAdmin = to.meta.requiresAdmin === true
+  const requiresFinance = to.meta.requiresFinance === true
 
   if (to.path === '/setup') {
     try {
@@ -865,7 +886,7 @@ router.beforeEach(async (to, _from, next) => {
     if (authStore.isAuthenticated && (to.path === '/login' || to.path === '/register')) {
       // In backend mode, non-admin users should NOT be redirected away from login
       // (they are blocked from all protected routes, so redirecting would cause a loop)
-      if (appStore.backendModeEnabled && !authStore.isAdmin) {
+      if (appStore.backendModeEnabled && !authStore.isAdmin && !authStore.isFinance) {
         next()
         return
       }
@@ -899,7 +920,7 @@ router.beforeEach(async (to, _from, next) => {
         return
       }
       // Backend mode:登录的非管理员也不可见(匿名由下方公共拦截处理,广场不在白名单)
-      if (appStore.backendModeEnabled && authStore.isAuthenticated && !authStore.isAdmin) {
+      if (appStore.backendModeEnabled && authStore.isAuthenticated && !authStore.isAdmin && !authStore.isFinance) {
         next('/login')
         return
       }
@@ -930,6 +951,11 @@ router.beforeEach(async (to, _from, next) => {
   if (requiresAdmin && !authStore.isAdmin) {
     // User is authenticated but not admin, redirect to user dashboard
     next('/dashboard')
+    return
+  }
+
+  if (requiresFinance && !authStore.canAccessFinance) {
+    next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
     return
   }
 
@@ -1005,9 +1031,9 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
-  // Backend mode: admin gets full access, non-admin blocked
+  // Backend mode allows staff roles; ordinary users remain restricted.
   if (appStore.backendModeEnabled) {
-    if (authStore.isAuthenticated && authStore.isAdmin) {
+    if (authStore.isAuthenticated && (authStore.isAdmin || authStore.isFinance)) {
       next()
       return
     }

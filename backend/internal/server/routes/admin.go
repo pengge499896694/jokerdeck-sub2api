@@ -48,6 +48,7 @@ func RegisterAdminRoutes(
 
 		// 公告管理
 		registerAnnouncementRoutes(admin, h)
+		registerFeedbackRoutes(admin, h)
 
 		// OpenAI OAuth
 		registerOpenAIOAuthRoutes(admin, h)
@@ -131,6 +132,17 @@ func RegisterAdminRoutes(
 
 		// 操作审计日志
 		registerAuditLogRoutes(admin, h, stepUpAuth)
+	}
+}
+
+func registerFeedbackRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	feedback := admin.Group("/feedback")
+	{
+		feedback.GET("/tickets", h.Admin.Feedback.List)
+		feedback.GET("/tickets/:id", h.Admin.Feedback.Get)
+		feedback.POST("/tickets/:id/messages", h.Admin.Feedback.Reply)
+		feedback.PUT("/tickets/:id/status", h.Admin.Feedback.SetStatus)
+		feedback.DELETE("/tickets/:id", h.Admin.Feedback.Delete)
 	}
 }
 

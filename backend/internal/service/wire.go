@@ -53,6 +53,10 @@ func ProvideEmailQueueService(emailService *EmailService) *EmailQueueService {
 	return NewEmailQueueService(emailService, 3)
 }
 
+func ProvideFeedbackReminderService(feedback *FeedbackService, cfg *config.Config) *FeedbackReminderService {
+	return NewFeedbackReminderService(feedback, cfg.Default.AdminEmail)
+}
+
 // ProvideAuthService wires the optional captcha providers into AuthService while
 // keeping NewAuthService's public constructor compatible with existing tests.
 func ProvideAuthService(
@@ -876,6 +880,8 @@ var ProviderSet = wire.NewSet(
 	NewBillingService,
 	ProvideBillingCacheService,
 	NewAnnouncementService,
+	NewFeedbackService,
+	NewFinanceService,
 	NewAdminService,
 	NewXianyuRechargeService,
 	NewGatewayService,
@@ -932,6 +938,7 @@ var ProviderSet = wire.NewSet(
 	NewEmailService,
 	NewNotificationEmailService,
 	ProvideEmailQueueService,
+	ProvideFeedbackReminderService,
 	NewTurnstileService,
 	NewTencentCaptchaService,
 	NewAliyunCaptchaService,

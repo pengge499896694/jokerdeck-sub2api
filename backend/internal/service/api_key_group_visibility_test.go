@@ -45,6 +45,16 @@ type visibilityGroupRepo struct {
 
 func (r *visibilityGroupRepo) ListActive(context.Context) ([]Group, error) { return r.groups, nil }
 
+type visibilityRateRepo struct {
+	UserGroupRateRepository
+	rates map[int64]float64
+	err   error
+}
+
+func (r *visibilityRateRepo) GetByUserID(context.Context, int64) (map[int64]float64, error) {
+	return r.rates, r.err
+}
+
 func TestGetUserGroupVisibilityIncludesActiveSubscriptions(t *testing.T) {
 	for _, restricted := range []bool{false, true} {
 		t.Run(map[bool]string{false: "unrestricted", true: "restricted"}[restricted], func(t *testing.T) {
@@ -97,4 +107,25 @@ func TestGetUserGroupVisibilityEmptyAndErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestUserGroupRateGrantsExclusiveGroupAccess(t *testing.T) {
+	rates := &visibilityRateRepo{rates: map[int64]float64{99: 0.25}}
+	svc := &APIKeyService{
+		userRepo: &visibilityUserRepo{user: &User{ID: 1}},
+		userSubRepo: &visibilitySubRepo{},
+		userGroupRateRepo: rates,
+		groupRepo: &visibilityGroupRepo{groups: []Group{
+			{ID: 99, Name: "专属倍率", IsExclusive: true},
+		}},
+	}
+
+	available, err := svc.GetAvailableGroups(context.Background(), 1)
+	require.NoError(t, err)
+	require.Len(t, available, 1)
+	require.Equal(t, int64(99), available[0].ID)
+
+	visible, _, err := svc.GetUserGroupVisibility(context.Background(), 1)
+	require.NoError(t, err)
+	require.Contains(t, visible, int64(99))
 }

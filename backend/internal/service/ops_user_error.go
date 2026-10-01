@@ -14,6 +14,8 @@ type UserErrorRequest struct {
 	ID              int64     `json:"id"`
 	CreatedAt       time.Time `json:"created_at"`
 	Model           string    `json:"model"`
+	RequestID       string    `json:"request_id,omitempty"`
+	ErrorCode       string    `json:"error_code,omitempty"`
 	InboundEndpoint string    `json:"inbound_endpoint"`
 	StatusCode      int       `json:"status_code"`
 	Category        string    `json:"category"`
@@ -106,6 +108,8 @@ func ToUserErrorRequest(e *OpsErrorLog) *UserErrorRequest {
 		ID:              e.ID,
 		CreatedAt:       e.CreatedAt,
 		Model:           model,
+		RequestID:       e.RequestID,
+		ErrorCode:       e.Type,
 		InboundEndpoint: e.InboundEndpoint,
 		StatusCode:      e.StatusCode,
 		Category:        MapUserErrorCategory(e.Phase, e.Type),

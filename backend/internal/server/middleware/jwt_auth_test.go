@@ -104,6 +104,24 @@ func TestJWTAuth_ValidToken(t *testing.T) {
 	require.Equal(t, "user", body["role"])
 }
 
+func TestJWTAuth_FinanceCanAccessUserRoute(t *testing.T) {
+	user := &service.User{
+		ID: 2, Email: "finance@example.com", Role: service.RoleFinance,
+		Status: service.StatusActive, TokenVersion: 1,
+	}
+	router, authSvc := newJWTTestEnv(map[int64]*service.User{2: user})
+	token, err := authSvc.GenerateToken(context.Background(), user)
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), `"role":"finance"`)
+}
+
 func TestJWTAuth_ValidToken_LowercaseBearer(t *testing.T) {
 	user := &service.User{
 		ID:           1,

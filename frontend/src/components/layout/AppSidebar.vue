@@ -127,8 +127,19 @@
       </template>
 
       <!-- Regular User View -->
-      <template v-else-if="!appStore.backendModeEnabled">
+      <template v-else-if="!appStore.backendModeEnabled || authStore.isFinance">
         <div class="sidebar-section">
+          <router-link
+            v-if="authStore.isFinance"
+            to="/finance"
+            class="sidebar-link mb-1"
+            :class="{ 'sidebar-link-active': isActive('/finance'), 'sidebar-link-collapsed': sidebarCollapsed }"
+            :title="sidebarCollapsed ? t('nav.finance') : undefined"
+            @click="handleMenuItemClick('/finance')"
+          >
+            <component :is="ChartIcon" class="h-5 w-5 flex-shrink-0" />
+            <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }">{{ t('nav.finance') }}</span>
+          </router-link>
           <router-link
             v-for="item in userNavItems"
             :key="item.path"
@@ -755,6 +766,8 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/redeem', label: t('nav.redeem'), icon: GiftIcon, hideInSimpleMode: true },
     { path: '/affiliate', label: t('nav.affiliate'), icon: UsersIcon, hideInSimpleMode: true, featureFlag: flagAffiliate },
     { path: '/profile', label: t('nav.profile'), icon: UserIcon },
+    { path: '/balance-notifications', label: '余额邮箱提醒', icon: BellIcon },
+    { path: '/feedback', label: t('nav.feedback'), icon: TicketIcon },
     ...customMenuItemsForUser.value.map((item): NavItem => ({
       path: `/custom/${item.id}`,
       label: item.label,
@@ -820,6 +833,8 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
     { path: '/admin/plugins', label: t('nav.plugins'), icon: PluginIcon, featureFlag: flagPluginManagement },
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
+    { path: '/admin/feedback', label: t('nav.feedback'), icon: TicketIcon },
+    { path: '/finance', label: t('nav.finance'), icon: ChartIcon },
     { path: '/admin/proxies', label: t('nav.proxies'), icon: ServerIcon },
     {
       path: '/admin/security-audit',

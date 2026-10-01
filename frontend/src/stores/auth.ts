@@ -96,6 +96,12 @@ export const useAuthStore = defineStore('auth', () => {
     return user.value?.role === 'admin'
   })
 
+  const isFinance = computed(() => {
+    return user.value?.role === 'finance'
+  })
+
+  const canAccessFinance = computed(() => isAdmin.value || isFinance.value)
+
   const isSimpleMode = computed(() => runMode.value === 'simple')
   const hasPendingAuthSession = computed(() => pendingAuthSession.value !== null)
 
@@ -498,6 +504,8 @@ export const useAuthStore = defineStore('auth', () => {
     // Computed
     isAuthenticated,
     isAdmin,
+    isFinance,
+    canAccessFinance,
     isSimpleMode,
     hasPendingAuthSession,
 

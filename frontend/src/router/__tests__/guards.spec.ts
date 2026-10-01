@@ -51,6 +51,7 @@ vi.mock('@/api/auth', () => ({
 interface MockAuthState {
   isAuthenticated: boolean
   isAdmin: boolean
+  isFinance?: boolean
   isSimpleMode: boolean
   backendModeEnabled: boolean
   hasPendingAuthSession: boolean
@@ -67,6 +68,7 @@ function simulateGuard(
 ): string | null {
   const requiresAuth = toMeta.requiresAuth !== false
   const requiresAdmin = toMeta.requiresAdmin === true
+  const requiresFinance = toMeta.requiresFinance === true
 
   if (toPath === '/setup' && authState.setupNeedsSetup === false) {
     return resolveCompletedSetupRedirectPath(authState.isAuthenticated, authState.isAdmin)
@@ -78,7 +80,7 @@ function simulateGuard(
       authState.isAuthenticated &&
       (toPath === '/login' || toPath === '/register')
     ) {
-      if (authState.backendModeEnabled && !authState.isAdmin) {
+      if (authState.backendModeEnabled && !authState.isAdmin && !authState.isFinance) {
         return null
       }
       return authState.isAdmin ? '/admin/dashboard' : '/dashboard'
@@ -114,6 +116,10 @@ function simulateGuard(
     return '/dashboard'
   }
 
+  if (requiresFinance && !authState.isAdmin && !authState.isFinance) {
+    return '/dashboard'
+  }
+
   // 简易模式限制
   if (authState.isSimpleMode) {
     const restrictedPaths = [
@@ -127,9 +133,9 @@ function simulateGuard(
     }
   }
 
-  // Backend mode: admin gets full access, non-admin blocked
+  // Backend mode allows staff roles; ordinary users remain restricted.
   if (authState.backendModeEnabled) {
-    if (authState.isAuthenticated && authState.isAdmin) {
+    if (authState.isAuthenticated && (authState.isAdmin || authState.isFinance)) {
       return null
     }
     const allowed = ['/login', '/key-usage', '/setup', '/payment/result']
@@ -224,6 +230,38 @@ describe('路由守卫逻辑', () => {
     it('访问 /admin/users 被拒绝', () => {
       const redirect = simulateGuard('/admin/users', { requiresAdmin: true }, authState)
       expect(redirect).toBe('/dashboard')
+    })
+  })
+
+  describe('已认证财务用户', () => {
+    const authState: MockAuthState = {
+      isAuthenticated: true,
+      isAdmin: false,
+      isFinance: true,
+      isSimpleMode: false,
+      backendModeEnabled: false,
+      hasPendingAuthSession: false,
+    }
+
+    it('默认进入用户首页', () => {
+      expect(resolveCompletedSetupRedirectPath(true, false)).toBe('/dashboard')
+      expect(simulateGuard('/login', { requiresAuth: false }, authState)).toBe('/dashboard')
+    })
+
+    it('同时可访问普通用户页面和财务中心', () => {
+      expect(simulateGuard('/dashboard', {}, authState)).toBeNull()
+      expect(simulateGuard('/keys', {}, authState)).toBeNull()
+      expect(simulateGuard('/finance', { requiresFinance: true }, authState)).toBeNull()
+    })
+
+    it('不能访问管理员页面', () => {
+      expect(simulateGuard('/admin/users', { requiresAdmin: true }, authState)).toBe('/dashboard')
+    })
+
+    it('backend mode 下仍可访问用户页面和财务中心', () => {
+      const backendFinance = { ...authState, backendModeEnabled: true }
+      expect(simulateGuard('/dashboard', {}, backendFinance)).toBeNull()
+      expect(simulateGuard('/finance', { requiresFinance: true }, backendFinance)).toBeNull()
     })
   })
 

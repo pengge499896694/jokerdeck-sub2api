@@ -1036,16 +1036,24 @@ func (s *APIKeyService) GetAvailableGroups(ctx context.Context, userID int64) ([
 		return nil, fmt.Errorf("list active subscriptions: %w", err)
 	}
 
+	// A user-specific multiplier is an explicit grant for that group. Keep it
+	// in the same authorization set as user_allowed_groups so clients can bind
+	// keys to exclusive groups configured only through the rate table.
+	userRateGroups, err := s.userRateGroupIDs(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
 	// 构建订阅分组 ID 集合
-	subscribedGroupIDs := make(map[int64]bool)
+	subscriptionGroupIDs := make(map[int64]bool)
 	for _, sub := range activeSubscriptions {
-		subscribedGroupIDs[sub.GroupID] = true
+		subscriptionGroupIDs[sub.GroupID] = true
 	}
 
 	// 过滤出用户有权限的分组
 	availableGroups := make([]Group, 0)
 	for _, group := range allGroups {
-		if s.canUserBindGroupInternal(user, &group, subscribedGroupIDs) {
+		if s.canUserBindGroupInternal(user, &group, subscriptionGroupIDs, userRateGroups) {
 			availableGroups = append(availableGroups, group)
 		}
 	}
@@ -1053,11 +1061,21 @@ func (s *APIKeyService) GetAvailableGroups(ctx context.Context, userID int64) ([
 	return availableGroups, nil
 }
 
-// canUserBindGroupInternal 内部方法，检查用户是否可以绑定分组（使用预加载的订阅数据）
-func (s *APIKeyService) canUserBindGroupInternal(user *User, group *Group, subscribedGroupIDs map[int64]bool) bool {
+// canUserBindGroupInternal 内部方法，检查用户是否可以绑定分组（使用预加载的权限数据）
+func (s *APIKeyService) canUserBindGroupInternal(
+	user *User,
+	group *Group,
+	subscriptionGroupIDs map[int64]bool,
+	rateGroupIDs map[int64]struct{},
+) bool {
 	// 订阅类型分组：需要有效订阅
 	if group.IsSubscriptionType() {
-		return subscribedGroupIDs[group.ID]
+		if subscriptionGroupIDs[group.ID] {
+			return true
+		}
+	}
+	if _, ok := rateGroupIDs[group.ID]; ok {
+		return true
 	}
 	// 标准类型分组：使用原有逻辑
 	return user.CanBindGroup(group.ID, group.IsExclusive)
@@ -1092,7 +1110,31 @@ func (s *APIKeyService) GetUserGroupVisibility(ctx context.Context, userID int64
 	for _, sub := range subscriptions {
 		allowed[sub.GroupID] = struct{}{}
 	}
+	rateGroups, err := s.userRateGroupIDs(ctx, userID)
+	if err != nil {
+		return nil, false, err
+	}
+	for groupID := range rateGroups {
+		allowed[groupID] = struct{}{}
+	}
 	return allowed, user.RestrictPublicGroups, nil
+}
+
+func (s *APIKeyService) userRateGroupIDs(ctx context.Context, userID int64) (map[int64]struct{}, error) {
+	ids := make(map[int64]struct{})
+	if s.userGroupRateRepo == nil {
+		return ids, nil
+	}
+	rates, err := s.userGroupRateRepo.GetByUserID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get user group rates: %w", err)
+	}
+	for groupID := range rates {
+		if groupID > 0 {
+			ids[groupID] = struct{}{}
+		}
+	}
+	return ids, nil
 }
 
 // GetUserGroupRates 获取用户的专属分组倍率配置
