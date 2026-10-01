@@ -179,9 +179,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	announcementHandler := handler.NewAnnouncementHandler(announcementService)
 	feedbackRepository := repository.NewFeedbackRepository(db)
 	feedbackService := service.NewFeedbackService(feedbackRepository, emailService)
-	feedbackReminderService := service.ProvideFeedbackReminderService(feedbackService, configConfig)
 	feedbackHandler := handler.NewFeedbackHandler(feedbackService)
-	adminFeedbackHandler := admin.NewFeedbackHandler(feedbackService)
 	financeRepository := repository.NewFinanceRepository(db)
 	financeService := service.NewFinanceService(financeRepository)
 	financeHandler := finance.NewHandler(financeService)
@@ -219,7 +217,8 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	accountTestService := service.ProvideAccountTestService(accountRepository, geminiTokenProvider, claudeTokenProvider, grokTokenProvider, antigravityGatewayService, httpUpstream, configConfig, tlsFingerprintProfileService, openAIGatewayService, settingService, pluginManager)
 	crsSyncService := service.NewCRSSyncService(accountRepository, proxyRepository, oAuthService, openAIOAuthService, geminiOAuthService, configConfig)
 	accountHandler := admin.ProvideAccountHandler(configConfig, adminService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, grokOAuthService, rateLimitService, accountUsageService, accountTestService, concurrencyService, crsSyncService, sessionLimitCache, rpmCache, compositeTokenCacheInvalidator, grokQuotaService)
-	adminAnnouncementHandler := admin.NewAnnouncementHandler(announcementService, emailService)
+	adminAnnouncementHandler := handler.ProvideAdminAnnouncementHandler(announcementService, emailService)
+	adminFeedbackHandler := admin.NewFeedbackHandler(feedbackService)
 	dataManagementService := service.NewDataManagementService()
 	dataManagementHandler := admin.NewDataManagementHandler(dataManagementService)
 	backupObjectStoreFactory := repository.NewS3BackupStoreFactory()
@@ -360,6 +359,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	subscriptionExpiryService := service.ProvideSubscriptionExpiryService(userSubscriptionRepository, settingRepository, notificationEmailService, leaderLockCache, db)
 	signupBonusReclaimService := service.ProvideSignupBonusReclaimService(adminService, settingService)
 	batchImageWorkerRuntime := service.ProvideBatchImageWorkerRuntime(batchImageRepository, accountRepository, batchImageQueue, usageBillingRepository, usageLogRepository, batchImageModelPricingResolver, apiKeyAuthCacheInvalidator, configConfig)
+	feedbackReminderService := service.ProvideFeedbackReminderService(feedbackService, configConfig)
 	scheduledTestRunnerService := service.ProvideScheduledTestRunnerService(scheduledTestPlanRepository, scheduledTestService, accountTestService, rateLimitService, configConfig)
 	paymentOrderExpiryService := service.ProvidePaymentOrderExpiryService(paymentService, leaderLockCache, db)
 	channelMonitorQuotaFetcher := service.NewChannelMonitorQuotaFetcher(accountUsageService, cnProviderQuotaService, cnProviderBalanceService, accountRepository, configConfig)
@@ -466,7 +466,9 @@ func provideCleanup(
 
 		parallelSteps := []cleanupStep{
 			{"FeedbackReminderService", func() error {
-				if feedbackReminder != nil { feedbackReminder.Stop() }
+				if feedbackReminder != nil {
+					feedbackReminder.Stop()
+				}
 				return nil
 			}},
 			{"PluginManager", func() error {

@@ -70,7 +70,6 @@ func RegisterAdminRoutes(
 
 		// 卡密管理
 		registerRedeemCodeRoutes(admin, h)
-		registerXianyuRechargeRoutes(admin, h)
 
 		// 优惠码管理
 		registerPromoCodeRoutes(admin, h)
@@ -143,16 +142,6 @@ func registerFeedbackRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		feedback.POST("/tickets/:id/messages", h.Admin.Feedback.Reply)
 		feedback.PUT("/tickets/:id/status", h.Admin.Feedback.SetStatus)
 		feedback.DELETE("/tickets/:id", h.Admin.Feedback.Delete)
-	}
-}
-
-func registerXianyuRechargeRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
-	orders := admin.Group("/xianyu-recharge-orders")
-	{
-		orders.GET("", h.Admin.XianyuRecharge.List)
-		orders.GET("/pending-count", h.Admin.XianyuRecharge.PendingCount)
-		orders.POST("/:id/credit", h.Admin.XianyuRecharge.Credit)
-		orders.POST("/:id/reject", h.Admin.XianyuRecharge.Reject)
 	}
 }
 
@@ -390,6 +379,9 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.GET("/opencode-go-usage/settings", h.Admin.Account.GetOpenCodeGoUsageSettings)
 		accounts.PUT("/opencode-go-usage/settings", h.Admin.Account.UpdateOpenCodeGoUsageSettings)
 		accounts.GET("/:id", h.Admin.Account.GetByID)
+		accounts.GET("/:id/claude/reset-credits", h.Admin.Account.ClaudeResetCredits)
+		// Same protection as the Codex reset-quota route (admin auth, audit, compliance guard).
+		accounts.POST("/:id/claude/reset-credits/redeem", h.Admin.Account.RedeemClaudeResetCredit)
 		accounts.POST("", h.Admin.Account.Create)
 		accounts.POST("/:id/duplicate", h.Admin.Account.Duplicate)
 		accounts.POST("/check-mixed-channel", h.Admin.Account.CheckMixedChannel)
@@ -466,7 +458,6 @@ func registerAnnouncementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		announcements.GET("/:id", h.Admin.Announcement.GetByID)
 		announcements.PUT("/:id", h.Admin.Announcement.Update)
 		announcements.DELETE("/:id", h.Admin.Announcement.Delete)
-		announcements.POST("/:id/email", h.Admin.Announcement.SendEmail)
 		announcements.GET("/:id/read-status", h.Admin.Announcement.ListReadStatus)
 	}
 }
