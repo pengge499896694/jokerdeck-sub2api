@@ -20,37 +20,106 @@ import (
 // AnnouncementHandler handles admin announcement management
 type AnnouncementHandler struct {
 	announcementService *service.AnnouncementService
-	emailService *service.EmailService
+	emailService        *service.EmailService
 }
 
 // NewAnnouncementHandler creates a new admin announcement handler
 func NewAnnouncementHandler(announcementService *service.AnnouncementService, emailServices ...*service.EmailService) *AnnouncementHandler {
 	var emailService *service.EmailService
-	if len(emailServices) > 0 { emailService = emailServices[0] }
+	if len(emailServices) > 0 {
+		emailService = emailServices[0]
+	}
 	return &AnnouncementHandler{
 		announcementService: announcementService,
-		emailService: emailService,
+		emailService:        emailService,
 	}
 }
 
 // SendEmail broadcasts an announcement to all eligible registered users.
 func (h *AnnouncementHandler) SendEmail(c *gin.Context) {
-	if h.emailService == nil { response.Error(c, http.StatusServiceUnavailable, "email service unavailable"); return }
+	if h.emailService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "email service unavailable")
+		return
+	}
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil || id <= 0 { response.BadRequest(c, "Invalid announcement ID"); return }
+	if err != nil || id <= 0 {
+		response.BadRequest(c, "Invalid announcement ID")
+		return
+	}
 	announcement, err := h.announcementService.GetByID(c.Request.Context(), id)
-	if err != nil { response.ErrorFrom(c, err); return }
-	var req struct { Subject string `json:"subject"` }
-	_ = c.ShouldBindJSON(&req)
-	subject := strings.TrimSpace(req.Subject); if subject == "" { subject = announcement.Title }
-	items, _, err := h.announcementService.ListUserReadStatus(c.Request.Context(), id, pagination.PaginationParams{Page: 1, PageSize: 100000, SortBy: "email", SortOrder: "asc"}, "")
-	if err != nil { response.ErrorFrom(c, err); return }
-	type result struct{ sent, failed int }
-	jobs := make(chan string); var wg sync.WaitGroup; var mu sync.Mutex; out := result{}
-	workers := 8; if len(items) < workers { workers = len(items) }
-	for i:=0; i<workers; i++ { wg.Add(1); go func(){ defer wg.Done(); for email := range jobs { body := "<h2>"+html.EscapeString(announcement.Title)+"</h2><div>"+html.EscapeString(announcement.Content)+"</div>"; e := h.emailService.SendEmail(c.Request.Context(), email, subject, body); mu.Lock(); if e != nil { out.failed++ } else { out.sent++ }; mu.Unlock() } }() }
-	for _, item := range items { if item.Eligible && strings.TrimSpace(item.Email)!="" { jobs <- item.Email } }; close(jobs); wg.Wait()
-	response.Success(c, gin.H{"total": out.sent+out.failed, "sent": out.sent, "failed": out.failed})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if announcement.Status != service.AnnouncementStatusActive {
+		response.BadRequest(c, "Only active announcements can be emailed")
+		return
+	}
+	var req struct {
+		Subject string `json:"subject"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid email request")
+		return
+	}
+	subject := strings.TrimSpace(req.Subject)
+	if subject == "" {
+		subject = announcement.Title
+	}
+	if len(subject) > 200 {
+		response.BadRequest(c, "Email subject is too long")
+		return
+	}
+
+	// Read all pages before sending so a pagination failure cannot silently skip recipients.
+	recipients := make(map[string]struct{})
+	for page := 1; ; page++ {
+		items, result, err := h.announcementService.ListUserReadStatus(
+			c.Request.Context(), id,
+			pagination.PaginationParams{Page: page, PageSize: 500, SortBy: "email", SortOrder: "asc"}, "",
+		)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		for _, item := range items {
+			email := strings.ToLower(strings.TrimSpace(item.Email))
+			if item.Eligible && email != "" {
+				recipients[email] = struct{}{}
+			}
+		}
+		if result == nil || page >= result.Pages {
+			break
+		}
+	}
+	jobs := make(chan string)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	sent, failed := 0, 0
+	body := "<h2>" + html.EscapeString(announcement.Title) + "</h2><p>" +
+		strings.ReplaceAll(html.EscapeString(announcement.Content), "\n", "<br>") + "</p>"
+	for range min(8, len(recipients)) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for email := range jobs {
+				err := h.emailService.SendEmail(c.Request.Context(), email, subject, body)
+				mu.Lock()
+				if err != nil {
+					failed++
+				} else {
+					sent++
+				}
+				mu.Unlock()
+			}
+		}()
+	}
+	for email := range recipients {
+		jobs <- email
+	}
+	close(jobs)
+	wg.Wait()
+	response.Success(c, gin.H{"total": len(recipients), "sent": sent, "failed": failed})
 }
 
 type CreateAnnouncementRequest struct {

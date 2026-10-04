@@ -10,6 +10,9 @@ describe('StoreView', () => {
           AppLayout: {
             template: '<div><slot /></div>',
           },
+          RechargeTermsGate: {
+            template: '<div><slot /></div>',
+          },
           Icon: true,
         },
       },

@@ -68,6 +68,9 @@ func (s *XianyuRechargeService) Create(ctx context.Context, userID int64, input 
 	if userID <= 0 {
 		return nil, infraerrors.Unauthorized("USER_NOT_AUTHENTICATED", "user not authenticated")
 	}
+	if err := RequireRechargeTerms(ctx, s.entClient, userID); err != nil {
+		return nil, err
+	}
 	if orderNo == "" || len(orderNo) > 128 {
 		return nil, infraerrors.BadRequest("XIANYU_ORDER_NO_INVALID", "闲鱼订单号不能为空，且不能超过 128 个字符")
 	}

@@ -1,5 +1,6 @@
 <template>
   <AppLayout>
+    <RechargeTermsGate>
     <div class="mx-auto max-w-5xl space-y-5">
       <section class="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-900">
         <div class="grid gap-6 p-5 md:grid-cols-[1fr_auto] md:items-center md:p-7">
@@ -140,6 +141,7 @@
         </section>
       </div>
     </div>
+    </RechargeTermsGate>
   </AppLayout>
 </template>
 
@@ -147,6 +149,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
+import RechargeTermsGate from '@/components/user/RechargeTermsGate.vue'
 import { useAppStore } from '@/stores/app'
 import { formatDateTime } from '@/utils/format'
 import {

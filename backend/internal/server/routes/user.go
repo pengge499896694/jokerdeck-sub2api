@@ -140,6 +140,11 @@ func RegisterUserRoutes(
 			xianyuRecharge.POST("", h.XianyuRecharge.Create)
 			xianyuRecharge.GET("", h.XianyuRecharge.List)
 		}
+		rechargeTerms := authenticated.Group("/recharge-terms")
+		{
+			rechargeTerms.GET("", h.XianyuRecharge.TermsStatus)
+			rechargeTerms.POST("/accept", h.XianyuRecharge.AcceptTerms)
+		}
 
 		// 用户订阅
 		subscriptions := authenticated.Group("/subscriptions")

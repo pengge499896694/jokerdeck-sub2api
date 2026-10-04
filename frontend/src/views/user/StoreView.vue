@@ -1,5 +1,6 @@
 <template>
   <AppLayout>
+    <RechargeTermsGate>
     <div class="store-page">
       <header class="store-toolbar">
         <div class="store-heading">
@@ -48,6 +49,7 @@
         ></iframe>
       </section>
     </div>
+    </RechargeTermsGate>
   </AppLayout>
 </template>
 
@@ -55,6 +57,7 @@
 import { ref } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
+import RechargeTermsGate from '@/components/user/RechargeTermsGate.vue'
 
 const storeUrl = 'https://catfk.com/shop/AYBIRLMN'
 const loading = ref(true)
