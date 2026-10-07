@@ -610,6 +610,16 @@ func (s *ChannelMonitorService) RunCheck(ctx context.Context, id int64) ([]*Chec
 	if !rt.ActiveProbesAllowed() {
 		return nil, ErrChannelMonitorActiveProbesRetired
 	}
+	return s.runConfiguredCheck(ctx, id)
+}
+
+// RunSelfCheck is only called after admin authorization and the independent switch check.
+// It never changes scheduled monitoring or starts a background probe.
+func (s *ChannelMonitorService) RunSelfCheck(ctx context.Context, id int64) ([]*CheckResult, error) {
+	return s.runConfiguredCheck(ctx, id)
+}
+
+func (s *ChannelMonitorService) runConfiguredCheck(ctx context.Context, id int64) ([]*CheckResult, error) {
 	m, err := s.Get(ctx, id) // 已解密 APIKey
 	if err != nil {
 		return nil, err

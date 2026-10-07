@@ -7,6 +7,7 @@ export default {
   home: {
     viewOnGithub: 'View on GitHub',
     viewDocs: 'View Documentation',
+    downloadClient: 'Download official client',
     docs: 'Docs',
     switchToLight: 'Switch to Light Mode',
     switchToDark: 'Switch to Dark Mode',

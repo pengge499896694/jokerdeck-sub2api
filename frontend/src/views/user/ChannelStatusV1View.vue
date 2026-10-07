@@ -19,6 +19,8 @@
       @card-click="openDetail"
     />
 
+
+
     <MonitorDetailDialog
       :show="showDetail"
       :monitor-id="detailTarget?.id ?? null"

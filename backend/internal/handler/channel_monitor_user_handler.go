@@ -1,12 +1,15 @@
 package handler
 
 import (
+	"context"
+	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	middleware "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -16,6 +19,125 @@ import (
 type ChannelMonitorUserHandler struct {
 	monitorService *service.ChannelMonitorService
 	settingService *service.SettingService
+	selfRunLock    sync.Mutex
+}
+
+// SelfRun uses server-configured upstream credentials; only admins may invoke it.
+func (h *ChannelMonitorUserHandler) SelfRun(c *gin.Context) {
+	role, _ := middleware.GetUserRoleFromContext(c)
+	if role != "admin" {
+		response.Forbidden(c, "Admin access required")
+		return
+	}
+	var req struct {
+		ID        int64 `json:"id"`
+		Confirmed bool  `json:"confirmed"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.ID < 0 || !req.Confirmed {
+		response.BadRequest(c, "Confirm upstream usage before checking")
+		return
+	}
+	enabled, err := h.settingService.SelfMonitorEnabled(c.Request.Context(), 0)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if !enabled {
+		response.Forbidden(c, "Self monitoring is disabled")
+		return
+	}
+	if !h.selfRunLock.TryLock() {
+		c.JSON(429, gin.H{"code": 429, "message": "A channel check is already running"})
+		return
+	}
+	defer h.selfRunLock.Unlock()
+	views, err := h.monitorService.ListSelfMonitorViews(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 120*time.Second)
+	defer cancel()
+	results := make([]gin.H, 0)
+	for _, view := range views {
+		if req.ID > 0 && req.ID != view.ID {
+			continue
+		}
+		active, err := h.settingService.SelfMonitorEnabled(ctx, view.ID)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		if !active {
+			continue
+		}
+		_, err = h.monitorService.RunSelfCheck(ctx, view.ID)
+		results = append(results, gin.H{"id": view.ID, "ok": err == nil})
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	if len(results) == 0 {
+		response.BadRequest(c, "No enabled channel selected")
+		return
+	}
+	response.Success(c, gin.H{"results": results})
+}
+
+func (h *ChannelMonitorUserHandler) SelfList(c *gin.Context) {
+	role, _ := middleware.GetUserRoleFromContext(c)
+	isAdmin := role == "admin"
+	enabled, err := h.settingService.SelfMonitorEnabled(c.Request.Context(), 0)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	items := make([]gin.H, 0)
+	if enabled || isAdmin {
+		views, err := h.monitorService.ListSelfMonitorViews(c.Request.Context())
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		for _, view := range views {
+			active, err := h.settingService.SelfMonitorEnabled(c.Request.Context(), view.ID)
+			if err != nil {
+				response.ErrorFrom(c, err)
+				return
+			}
+			if active || isAdmin {
+				items = append(items, gin.H{"monitor": userMonitorViewToItem(view, false), "enabled": active})
+			}
+		}
+	}
+	response.Success(c, gin.H{"enabled": enabled, "items": items})
+}
+
+func (h *ChannelMonitorUserHandler) SelfToggle(c *gin.Context) {
+	role, _ := middleware.GetUserRoleFromContext(c)
+	if role != "admin" {
+		response.Forbidden(c, "Admin access required")
+		return
+	}
+	var req struct {
+		ID      int64 `json:"id"`
+		Enabled *bool `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.ID < 0 || req.Enabled == nil {
+		response.BadRequest(c, "Invalid switch configuration")
+		return
+	}
+	if req.ID > 0 {
+		if _, err := h.monitorService.Get(c.Request.Context(), req.ID); err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+	}
+	if err := h.settingService.SetSelfMonitorEnabled(c.Request.Context(), req.ID, *req.Enabled); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"enabled": *req.Enabled})
 }
 
 // NewChannelMonitorUserHandler 创建 handler。

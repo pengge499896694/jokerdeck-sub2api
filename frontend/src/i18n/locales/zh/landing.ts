@@ -7,6 +7,7 @@ export default {
   home: {
     viewOnGithub: '在 GitHub 上查看',
     viewDocs: '查看文档',
+    downloadClient: '下载官方客户端',
     docs: '文档',
     switchToLight: '切换到浅色模式',
     switchToDark: '切换到深色模式',

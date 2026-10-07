@@ -539,6 +539,12 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/self-monitor',
+    name: 'SelfChannelMonitor',
+    component: () => import('@/views/user/SelfChannelMonitorView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, title: '自助渠道监控' }
+  },
+  {
     path: '/monitor',
     name: 'ChannelStatus',
     component: () => import('@/views/user/ChannelStatusView.vue'),

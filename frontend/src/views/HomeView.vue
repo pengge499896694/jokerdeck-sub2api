@@ -40,6 +40,15 @@
           >
             <Icon name="book" size="md" />
           </a>
+          <a
+            href="https://jokerdeck.de5.net/client-site/"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-primary-200 px-3 text-sm font-medium text-primary-700 hover:bg-primary-50 dark:border-primary-800 dark:text-primary-300 dark:hover:bg-primary-900/30"
+          >
+            <Icon name="download" size="sm" />
+            <span>{{ t('home.downloadClient') }}</span>
+          </a>
           <router-link
             v-if="showModelPlazaEntry"
             to="/model-plaza"
@@ -139,6 +148,15 @@
             :title="t('home.viewDocs')"
           >
             <Icon name="book" size="md" />
+          </a>
+          <a
+            href="https://jokerdeck.de5.net/client-site/"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 px-3 py-2 text-sm text-primary-700 hover:bg-primary-50 dark:border-primary-800 dark:text-primary-300 dark:hover:bg-primary-900/30"
+          >
+            <Icon name="download" size="sm" />
+            <span>{{ t('home.downloadClient') }}</span>
           </a>
 
           <!-- Model Plaza Link -->
