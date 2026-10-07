@@ -67,8 +67,6 @@
     "vite-plugin-checker": "^0.9.1",
     "vitest": "^2.1.9",
     "vue-tsc": "^2.2.0"
-<<<<<<< ours
-=======
   },
   "pnpm": {
     "overrides": {
@@ -78,6 +76,5 @@
       "dompurify@<3.4.14": ">=3.4.14",
       "source-map-js@<1.2.2": ">=1.2.2"
     }
->>>>>>> theirs
   }
 }
