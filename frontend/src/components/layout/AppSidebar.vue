@@ -160,7 +160,7 @@
 
     <!-- Client Download -->
     <a href="https://jokerdeck.de5.net/client-site/" target="_blank" rel="noopener noreferrer" class="sidebar-link mb-2 w-full" :title="sidebarCollapsed ? 'Download Client' : undefined">
-      <ArrowDownTrayIcon class="h-5 w-5 flex-shrink-0" />
+      <span class="h-5 w-5 flex-shrink-0 text-center">↓</span>
       <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }">Download Client</span>
     </a>
 
