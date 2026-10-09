@@ -24,7 +24,7 @@ func (r *financeRepository) ListUsers(ctx context.Context, search string) ([]ser
 		args = append(args, "%"+search+"%")
 		where += fmt.Sprintf(" AND (u.email ILIKE $%d OR COALESCE(u.username, '') ILIKE $%d)", len(args), len(args))
 	}
-	rows, err := r.db.QueryContext(ctx, `SELECT u.id, u.email, COALESCE(u.username, ''), fgm.group_id, COALESCE(fg.name, '')
+	rows, err := r.db.QueryContext(ctx, `SELECT u.id, u.email, COALESCE(u.username, ''), COALESCE(u.balance, 0), COALESCE(u.concurrency, 0), fgm.group_id, COALESCE(fg.name, '')
 		FROM users u
 		LEFT JOIN finance_group_members fgm ON fgm.user_id = u.id
 		LEFT JOIN finance_groups fg ON fg.id = fgm.group_id `+where+` ORDER BY u.email LIMIT 2000`, args...)
@@ -35,12 +35,54 @@ func (r *financeRepository) ListUsers(ctx context.Context, search string) ([]ser
 	out := make([]service.FinanceUser, 0)
 	for rows.Next() {
 		var item service.FinanceUser
-		if err := rows.Scan(&item.ID, &item.Email, &item.Username, &item.GroupID, &item.GroupName); err != nil {
+		if err := rows.Scan(&item.ID, &item.Email, &item.Username, &item.Balance, &item.Concurrency, &item.GroupID, &item.GroupName); err != nil {
 			return nil, err
 		}
 		out = append(out, item)
 	}
 	return out, rows.Err()
+}
+
+func (r *financeRepository) ListBalances(ctx context.Context, f service.FinanceFilters) ([]service.FinanceUser, *pagination.PaginationResult, error) {
+	conditions := []string{"u.deleted_at IS NULL"}
+	args := []any{}
+	if f.UserID > 0 {
+		args = append(args, f.UserID)
+		conditions = append(conditions, fmt.Sprintf("u.id = $%d", len(args)))
+	}
+	if f.GroupID > 0 {
+		args = append(args, f.GroupID)
+		conditions = append(conditions, fmt.Sprintf("fgm.group_id = $%d", len(args)))
+	}
+	if search := strings.TrimSpace(f.Search); search != "" {
+		args = append(args, "%"+search+"%")
+		conditions = append(conditions, fmt.Sprintf("(u.email ILIKE $%d OR COALESCE(u.username, '') ILIKE $%d)", len(args), len(args)))
+	}
+	base := ` FROM users u LEFT JOIN finance_group_members fgm ON fgm.user_id = u.id
+		LEFT JOIN finance_groups fg ON fg.id = fgm.group_id WHERE ` + strings.Join(conditions, " AND ")
+	var total int64
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*)`+base, args...).Scan(&total); err != nil {
+		return nil, nil, err
+	}
+	pageArgs := append(append([]any{}, args...), f.PageSize, (f.Page-1)*f.PageSize)
+	rows, err := r.db.QueryContext(ctx, `SELECT u.id, u.email, COALESCE(u.username, ''), COALESCE(u.balance, 0), COALESCE(u.concurrency, 0), fgm.group_id, COALESCE(fg.name, '')`+
+		base+` ORDER BY u.id DESC LIMIT $`+fmt.Sprint(len(args)+1)+` OFFSET $`+fmt.Sprint(len(args)+2), pageArgs...)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	items := make([]service.FinanceUser, 0, f.PageSize)
+	for rows.Next() {
+		var item service.FinanceUser
+		if err := rows.Scan(&item.ID, &item.Email, &item.Username, &item.Balance, &item.Concurrency, &item.GroupID, &item.GroupName); err != nil {
+			return nil, nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	return items, paginationResultFromTotal(total, pagination.PaginationParams{Page: f.Page, PageSize: f.PageSize}), nil
 }
 
 func (r *financeRepository) ListGroups(ctx context.Context) ([]service.FinanceGroup, error) {
@@ -72,7 +114,7 @@ func (r *financeRepository) ListGroups(ctx context.Context) ([]service.FinanceGr
 }
 
 func (r *financeRepository) ListGroupMembers(ctx context.Context, groupID int64) ([]service.FinanceUser, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT u.id, u.email, COALESCE(u.username, ''), fgm.group_id, fg.name
+	rows, err := r.db.QueryContext(ctx, `SELECT u.id, u.email, COALESCE(u.username, ''), COALESCE(u.balance, 0), COALESCE(u.concurrency, 0), fgm.group_id, fg.name
 		FROM finance_group_members fgm JOIN users u ON u.id = fgm.user_id
 		JOIN finance_groups fg ON fg.id = fgm.group_id
 		WHERE fgm.group_id = $1 AND u.deleted_at IS NULL ORDER BY u.email`, groupID)
@@ -83,7 +125,7 @@ func (r *financeRepository) ListGroupMembers(ctx context.Context, groupID int64)
 	out := make([]service.FinanceUser, 0)
 	for rows.Next() {
 		var item service.FinanceUser
-		if err := rows.Scan(&item.ID, &item.Email, &item.Username, &item.GroupID, &item.GroupName); err != nil {
+		if err := rows.Scan(&item.ID, &item.Email, &item.Username, &item.Balance, &item.Concurrency, &item.GroupID, &item.GroupName); err != nil {
 			return nil, err
 		}
 		out = append(out, item)

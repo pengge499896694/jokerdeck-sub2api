@@ -3824,6 +3824,7 @@
 
         <!-- Tab: Users -->
         <div v-show="activeTab === 'users'" class="space-y-6">
+          <ClientProviderPolicy />
           <!-- Default Settings -->
           <div class="card">
             <div
@@ -9012,6 +9013,7 @@ import type {
 } from "@/types";
 import type { ProviderInstance } from "@/types/payment";
 import AppLayout from "@/components/layout/AppLayout.vue";
+import ClientProviderPolicy from "@/components/admin/ClientProviderPolicy.vue";
 import Icon from "@/components/icons/Icon.vue";
 import Select, { type SelectOption } from "@/components/common/Select.vue";
 import {

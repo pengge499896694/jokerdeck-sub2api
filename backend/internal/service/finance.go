@@ -18,11 +18,13 @@ type FinanceFilters struct {
 }
 
 type FinanceUser struct {
-	ID        int64     `json:"id"`
-	Email     string    `json:"email"`
-	Username  string    `json:"username"`
-	GroupID   *int64    `json:"group_id,omitempty"`
-	GroupName string    `json:"group_name,omitempty"`
+	ID          int64   `json:"id"`
+	Email       string  `json:"email"`
+	Username    string  `json:"username"`
+	Balance     float64 `json:"balance"`
+	Concurrency int     `json:"concurrency"`
+	GroupID     *int64  `json:"group_id,omitempty"`
+	GroupName   string  `json:"group_name,omitempty"`
 }
 
 type FinanceGroup struct {
@@ -64,6 +66,7 @@ type FinanceUsage struct {
 
 type FinanceRepository interface {
 	ListUsers(ctx context.Context, search string) ([]FinanceUser, error)
+	ListBalances(ctx context.Context, filters FinanceFilters) ([]FinanceUser, *pagination.PaginationResult, error)
 	ListGroups(ctx context.Context) ([]FinanceGroup, error)
 	CreateGroup(ctx context.Context, actorID int64, name, description string) (*FinanceGroup, error)
 	UpdateGroup(ctx context.Context, id int64, name, description string) (*FinanceGroup, error)
@@ -83,6 +86,10 @@ func NewFinanceService(repo FinanceRepository) *FinanceService {
 
 func (s *FinanceService) ListUsers(ctx context.Context, search string) ([]FinanceUser, error) {
 	return s.repo.ListUsers(ctx, search)
+}
+
+func (s *FinanceService) ListBalances(ctx context.Context, filters FinanceFilters) ([]FinanceUser, *pagination.PaginationResult, error) {
+	return s.repo.ListBalances(ctx, filters)
 }
 
 func (s *FinanceService) ListGroups(ctx context.Context) ([]FinanceGroup, error) {

@@ -1,6 +1,12 @@
 export default {
     settings: {
       title: '系统设置',
+      clientProvider: {
+        title: 'jokerdeck-chatgpt 客户端服务商权限',
+        description: '默认锁定自有服务商。开放后仅充值过的用户可以切换；外部服务商不提供售后。修改即时保存，已存会话保留。',
+        loading: '处理中...', lock: '禁止用户更换服务商', unlock: '允许充值用户更换服务商',
+        refresh: '刷新权限', allowed: '已开放', locked: '已锁定', failed: '权限设置读取或保存失败，请重试。',
+      },
       description: '管理注册、邮箱验证、默认值和 SMTP 设置',
       tabs: {
         general: '通用设置',

@@ -1,6 +1,12 @@
 export default {
     settings: {
       title: 'System Settings',
+      clientProvider: {
+        title: 'jokerdeck-chatgpt provider policy',
+        description: 'Locked to your service by default. When enabled, users who have recharged can switch providers. External providers receive no support. Changes save immediately and conversations are retained.',
+        loading: 'Saving...', lock: 'Disallow provider switching', unlock: 'Allow recharged users to switch',
+        refresh: 'Refresh policy', allowed: 'Allowed', locked: 'Locked', failed: 'Unable to read or save the policy. Please retry.',
+      },
       description: 'Manage registration, email verification, default values, and SMTP settings',
       tabs: {
         general: 'General',

@@ -20,11 +20,65 @@ const (
 )
 
 type Handler struct {
-	service *service.FinanceService
+	service      *service.FinanceService
+	adminService service.AdminService
 }
 
-func NewHandler(financeService *service.FinanceService) *Handler {
-	return &Handler{service: financeService}
+func NewHandler(financeService *service.FinanceService, adminService service.AdminService) *Handler {
+	return &Handler{service: financeService, adminService: adminService}
+}
+
+type balanceHistoryItem struct {
+	ID           int64      `json:"id"`
+	Type         string     `json:"type"`
+	Value        float64    `json:"value"`
+	Status       string     `json:"status"`
+	UsedBy       *int64     `json:"used_by"`
+	UsedAt       *time.Time `json:"used_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	GroupID      *int64     `json:"group_id"`
+	ValidityDays int        `json:"validity_days"`
+	Notes        string     `json:"notes"`
+}
+
+func (h *Handler) BalanceHistory(c *gin.Context) {
+	id, ok := parsePositiveID(c)
+	if !ok {
+		return
+	}
+	page, pageSize := response.ParsePagination(c)
+	codes, total, totalRecharged, err := h.adminService.GetUserBalanceHistory(c.Request.Context(), id, page, pageSize, c.Query("type"))
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	items := make([]balanceHistoryItem, 0, len(codes))
+	for _, code := range codes {
+		items = append(items, balanceHistoryItem{
+			ID: code.ID, Type: code.Type, Value: code.Value, Status: code.Status,
+			UsedBy: code.UsedBy, UsedAt: code.UsedAt, CreatedAt: code.CreatedAt, GroupID: code.GroupID,
+			ValidityDays: code.ValidityDays, Notes: code.Notes,
+		})
+	}
+	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
+	if pages < 1 {
+		pages = 1
+	}
+	response.Success(c, gin.H{"items": items, "total": total, "page": page, "page_size": pageSize, "pages": pages, "total_recharged": totalRecharged})
+}
+
+func (h *Handler) Balances(c *gin.Context) {
+	filters, err := parseFinanceFilters(c)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	items, page, err := h.service.ListBalances(c.Request.Context(), filters)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"items": items, "total": page.Total, "page": page.Page, "page_size": page.PageSize, "pages": page.Pages})
 }
 
 type groupRequest struct {
@@ -37,14 +91,14 @@ type groupMembersRequest struct {
 }
 
 type financePage struct {
-	Items       any                            `json:"items"`
-	Total       int64                          `json:"total"`
-	Page        int                            `json:"page"`
-	PageSize    int                            `json:"page_size"`
-	Pages       int                            `json:"pages"`
-	TotalAmount float64                        `json:"total_amount"`
-	Kind        string                         `json:"kind"`
-	Filters     map[string]string              `json:"filters,omitempty"`
+	Items       any               `json:"items"`
+	Total       int64             `json:"total"`
+	Page        int               `json:"page"`
+	PageSize    int               `json:"page_size"`
+	Pages       int               `json:"pages"`
+	TotalAmount float64           `json:"total_amount"`
+	Kind        string            `json:"kind"`
+	Filters     map[string]string `json:"filters,omitempty"`
 }
 
 func (h *Handler) Users(c *gin.Context) {

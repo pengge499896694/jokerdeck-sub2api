@@ -4,8 +4,30 @@ export interface FinanceUser {
   id: number
   email: string
   username: string
+  balance: number
+  concurrency: number
   group_id?: number | null
   group_name?: string
+}
+
+export interface FinanceBalanceHistoryItem {
+  id: number
+  type: string
+  value: number
+  status: string
+  used_at?: string | null
+  created_at: string
+  validity_days?: number
+  notes?: string
+}
+
+export interface FinanceBalanceHistoryPage {
+  items: FinanceBalanceHistoryItem[]
+  total: number
+  page: number
+  page_size: number
+  pages: number
+  total_recharged: number
 }
 
 export interface FinanceGroup {
@@ -68,6 +90,10 @@ export interface FinanceFilters {
 const financeAPI = {
   users: (search?: string) =>
     apiClient.get<{ items: FinanceUser[] }>('/finance/users', { params: { search } }).then((r) => r.data),
+  balances: (params: FinanceFilters) =>
+    apiClient.get<Pick<FinancePage<FinanceUser>, 'items' | 'total' | 'page' | 'page_size' | 'pages'>>('/finance/balances', { params }).then((r) => r.data),
+  balanceHistory: (id: number, params: { page?: number; page_size?: number; type?: string } = {}) =>
+    apiClient.get<FinanceBalanceHistoryPage>(`/finance/users/${id}/balance-history`, { params }).then((r) => r.data),
   groups: () => apiClient.get<{ items: FinanceGroup[] }>('/finance/groups').then((r) => r.data),
   createGroup: (payload: { name: string; description?: string }) =>
     apiClient.post<FinanceGroup>('/finance/groups', payload).then((r) => r.data),

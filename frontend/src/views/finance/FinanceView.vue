@@ -11,7 +11,7 @@
             <Icon name="refresh" size="sm" :class="{ 'animate-spin': loading }" />
             刷新
           </button>
-          <button class="btn btn-primary" :disabled="loading" @click="downloadExport">
+          <button v-if="activeTab !== 'users'" class="btn btn-primary" :disabled="loading" @click="downloadExport">
             <Icon name="download" size="sm" />
             导出{{ activeTab === 'recharge' ? '充值' : '使用' }}明细
           </button>
@@ -20,11 +20,11 @@
 
       <section class="card p-4">
         <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
-          <div>
+          <div v-if="activeTab !== 'users'">
             <label class="input-label">起始月份</label>
             <input v-model="filters.start_month" type="month" class="input" :max="filters.end_month || undefined" @change="search" />
           </div>
-          <div>
+          <div v-if="activeTab !== 'users'">
             <label class="input-label">结束月份</label>
             <input v-model="filters.end_month" type="month" class="input" :min="filters.start_month || undefined" @change="search" />
           </div>
@@ -46,7 +46,7 @@
         </div>
       </section>
 
-      <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div v-if="activeTab !== 'users'" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div class="card p-4">
           <div class="text-sm text-gray-500 dark:text-gray-400">{{ activeTab === 'recharge' ? '充值金额' : '使用费用' }}</div>
           <div class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">${{ formatMoney(page.total_amount) }}</div>
@@ -73,7 +73,28 @@
         </button>
       </div>
 
-      <div class="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-900">
+      <div v-if="activeTab === 'users'" class="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-900">
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-left text-sm">
+            <thead class="bg-gray-50 text-xs text-gray-500 dark:bg-dark-800 dark:text-gray-400">
+              <tr><th class="px-4 py-3">用户</th><th class="px-4 py-3 text-right">余额</th><th class="px-4 py-3 text-right">并发</th><th class="px-4 py-3">分组</th><th class="px-4 py-3 text-right">操作</th></tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-dark-800">
+              <tr v-for="user in balanceItems" :key="user.id">
+                <td class="px-4 py-3"><div class="font-medium">{{ user.username || '—' }}</div><div class="text-xs text-gray-500">{{ user.email }}</div></td>
+                <td class="px-4 py-3 text-right font-semibold text-emerald-600">${{ formatMoney(user.balance) }}</td>
+                <td class="px-4 py-3 text-right">{{ user.concurrency }}</td>
+                <td class="px-4 py-3">{{ user.group_name || '未分组' }}</td>
+                <td class="px-4 py-3 text-right"><button class="btn btn-secondary btn-sm" @click="openHistory(user)">查看变动</button></td>
+              </tr>
+              <tr v-if="!loading && balanceItems.length === 0"><td colspan="5" class="px-4 py-12 text-center text-gray-500">暂无用户</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <Pagination v-if="page.total > 0" :total="page.total" :page="page.page" :page-size="page.page_size" @update:page="changePage" @update:pageSize="changePageSize" />
+      </div>
+
+      <div v-else class="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-900">
         <div class="overflow-x-auto">
           <table class="min-w-full text-left text-sm">
             <thead class="bg-gray-50 text-xs uppercase text-gray-500 dark:bg-dark-800 dark:text-gray-400">
@@ -164,6 +185,23 @@
       <template #footer><div class="flex justify-end gap-2"><button class="btn btn-secondary" @click="groupDialog.open = false">取消</button><button class="btn btn-primary" form="finance-group-form" :disabled="savingGroupId === -1">保存</button></div></template>
     </BaseDialog>
     <ConfirmDialog :show="deleteDialog.open" title="删除分组" message="删除分组不会删除用户，但会清空该分组成员。确认继续吗？" confirm-text="确认删除" cancel-text="取消" :danger="true" @confirm="deleteGroup" @cancel="deleteDialog.open = false" />
+    <BaseDialog :show="historyDialog.open" :title="`${historyDialog.user?.username || historyDialog.user?.email || ''} · 余额与并发变动`" width="wide" @close="historyDialog.open = false">
+      <div class="mb-4 flex items-center justify-between text-sm text-gray-500">
+        <span>累计充值：<strong class="text-emerald-600">${{ formatMoney(historyDialog.totalRecharged) }}</strong></span>
+        <Select v-model="historyDialog.type" :options="historyTypeOptions" class="w-48" @change="loadHistory(1)" />
+      </div>
+      <div v-if="historyDialog.loading" class="py-10 text-center text-gray-500">加载中...</div>
+      <div v-else-if="historyDialog.items.length === 0" class="py-10 text-center text-gray-500">暂无变动记录</div>
+      <div v-else class="max-h-[28rem] space-y-2 overflow-y-auto">
+        <div v-for="item in historyDialog.items" :key="item.id" class="flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-dark-700">
+          <div><div class="font-medium">{{ historyTitle(item) }}</div><div class="text-xs text-gray-500">{{ item.notes || '—' }} · {{ formatTime(item.used_at || item.created_at) }}</div></div>
+          <div :class="item.value >= 0 ? 'text-emerald-600' : 'text-red-600'" class="font-semibold">{{ item.value >= 0 ? '+' : '' }}{{ item.type.includes('concurrency') ? item.value : `$${formatMoney(item.value)}` }}</div>
+        </div>
+      </div>
+      <div v-if="historyDialog.pages > 1" class="mt-4 flex items-center justify-center gap-3 text-sm">
+        <button class="btn btn-secondary btn-sm" :disabled="historyDialog.page <= 1" @click="loadHistory(historyDialog.page - 1)">上一页</button><span>{{ historyDialog.page }} / {{ historyDialog.pages }}</span><button class="btn btn-secondary btn-sm" :disabled="historyDialog.page >= historyDialog.pages" @click="loadHistory(historyDialog.page + 1)">下一页</button>
+      </div>
+    </BaseDialog>
   </AppLayout>
 </template>
 
@@ -175,16 +213,17 @@ import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
-import financeAPI, { type FinanceFilters, type FinanceGroup, type FinanceRecharge, type FinanceUsage, type FinanceUser } from '@/api/finance'
+import financeAPI, { type FinanceBalanceHistoryItem, type FinanceFilters, type FinanceGroup, type FinanceRecharge, type FinanceUsage, type FinanceUser } from '@/api/finance'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 
-type Tab = 'recharge' | 'usage'
+type Tab = 'recharge' | 'usage' | 'users'
 const appStore = useAppStore()
 const activeTab = ref<Tab>('recharge')
 const loading = ref(false)
 const groups = ref<FinanceGroup[]>([])
 const users = ref<FinanceUser[]>([])
+const balanceItems = ref<FinanceUser[]>([])
 const rechargeItems = ref<FinanceRecharge[]>([])
 const usageItems = ref<FinanceUsage[]>([])
 const draggedUserId = ref<number | null>(null)
@@ -195,7 +234,9 @@ const today = new Date()
 const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
 const filters = reactive<FinanceFilters>({ start_month: currentMonth, end_month: currentMonth, user_id: undefined, group_id: undefined, search: '', page: 1, page_size: 20 })
 const page = reactive({ total: 0, page: 1, page_size: 20, pages: 0, total_amount: 0 })
-const tabs = [{ value: 'recharge' as const, label: '充值记录' }, { value: 'usage' as const, label: '使用记录' }]
+const tabs = [{ value: 'recharge' as const, label: '充值记录' }, { value: 'usage' as const, label: '使用记录' }, { value: 'users' as const, label: '用户余额' }]
+const historyTypeOptions = [{ value: '', label: '全部变动' }, { value: 'balance', label: '余额充值' }, { value: 'admin_balance', label: '余额调整' }, { value: 'concurrency', label: '并发变动' }, { value: 'admin_concurrency', label: '并发调整' }]
+const historyDialog = reactive({ open: false, user: null as FinanceUser | null, items: [] as FinanceBalanceHistoryItem[], totalRecharged: 0, page: 1, pages: 1, type: '', loading: false })
 
 const groupOptions = computed(() => [{ value: undefined, label: '全部分组' }, ...groups.value.map((item) => ({ value: item.id, label: item.name }))])
 const userOptions = computed(() => [{ value: undefined, label: '全部用户' }, ...users.value.map((item) => ({ value: item.id, label: `${item.username || item.email} (${item.email})` }))])
@@ -221,10 +262,45 @@ function validRange() {
 }
 
 async function loadRecords() {
+  if (activeTab.value === 'users') {
+    const result = await financeAPI.balances(query())
+    balanceItems.value = result.items
+    page.total = result.total; page.page = result.page; page.page_size = result.page_size; page.pages = result.pages
+    return
+  }
   const result = activeTab.value === 'recharge' ? await financeAPI.recharges(query()) : await financeAPI.usage(query())
   page.total = result.total; page.page = result.page; page.page_size = result.page_size; page.pages = result.pages; page.total_amount = result.total_amount
   if (activeTab.value === 'recharge') rechargeItems.value = result.items as FinanceRecharge[]
   else usageItems.value = result.items as FinanceUsage[]
+}
+async function openHistory(user: FinanceUser) {
+  historyDialog.user = user
+  historyDialog.open = true
+  historyDialog.type = ''
+  await loadHistory(1)
+}
+async function loadHistory(pageNumber: number) {
+  if (!historyDialog.user) return
+  historyDialog.loading = true
+  try {
+    const result = await financeAPI.balanceHistory(historyDialog.user.id, { page: pageNumber, page_size: 15, type: historyDialog.type || undefined })
+    historyDialog.items = result.items
+    historyDialog.totalRecharged = result.total_recharged
+    historyDialog.page = result.page
+    historyDialog.pages = result.pages
+  } catch (error) {
+    appStore.showError(extractApiErrorMessage(error, '变动记录加载失败'))
+  } finally {
+    historyDialog.loading = false
+  }
+}
+function historyTitle(item: FinanceBalanceHistoryItem) {
+  if (item.type === 'balance') return '充值'
+  if (item.type === 'affiliate_balance') return '返利'
+  if (item.type === 'admin_balance') return item.value >= 0 ? '管理员充值' : '管理员扣除'
+  if (item.type === 'concurrency') return '兑换码并发变动'
+  if (item.type === 'admin_concurrency') return item.value >= 0 ? '管理员增加并发' : '管理员减少并发'
+  return item.type
 }
 async function loadAll() {
   try { loading.value = true; const [groupResult, userResult] = await Promise.all([financeAPI.groups(), financeAPI.users()]); groups.value = groupResult.items; users.value = userResult.items; await loadRecords() }
@@ -270,8 +346,10 @@ async function submitGroup() {
 function askDeleteGroup(group: FinanceGroup) { deleteDialog.group = group; deleteDialog.open = true }
 async function deleteGroup() { if (!deleteDialog.group) return; try { savingGroupId.value = -1; await financeAPI.deleteGroup(deleteDialog.group.id); deleteDialog.open = false; await loadAll() } catch (error) { appStore.showError(extractApiErrorMessage(error, '分组删除失败')) } finally { savingGroupId.value = null } }
 async function downloadExport() {
+  if (activeTab.value === 'users') return
   if (!validRange()) return
-  try { const blob = await financeAPI.export(activeTab.value, query()); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `finance-${activeTab.value}-${new Date().toISOString().slice(0, 10)}.csv`; link.click(); URL.revokeObjectURL(url) }
+  const exportType = activeTab.value
+  try { const blob = await financeAPI.export(exportType, query()); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `finance-${exportType}-${new Date().toISOString().slice(0, 10)}.csv`; link.click(); URL.revokeObjectURL(url) }
   catch (error) { appStore.showError(extractApiErrorMessage(error, '导出失败')) }
 }
 onMounted(loadAll)
