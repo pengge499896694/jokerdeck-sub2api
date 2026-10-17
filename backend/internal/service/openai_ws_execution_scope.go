@@ -34,6 +34,12 @@ const (
 // resolveOpenAIWSClientThreadID 提取 codex 客户端的线程标识。codex 多智能体会话里
 // 父线程与全部子智能体共用同一个 session-id 头，只有线程标识能把它们区分开。
 // 优先级：thread-id 头 → x-codex-turn-metadata 头 → x-codex-window-id 头 → 请求体 client_metadata。
+// ExtractCodexThreadID resolves the inbound Codex thread, including HTTP body
+// metadata and WebSocket response.create envelopes. Empty means no usable ID.
+func ExtractCodexThreadID(c *gin.Context, body []byte) string {
+	return sanitizeSessionID(resolveOpenAIWSClientThreadID(c, body))
+}
+
 func resolveOpenAIWSClientThreadID(c *gin.Context, body []byte) string {
 	if c != nil && c.Request != nil {
 		if id := strings.TrimSpace(c.GetHeader(openAIWSThreadIDHeader)); id != "" {
