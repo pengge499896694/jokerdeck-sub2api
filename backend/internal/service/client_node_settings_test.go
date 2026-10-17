@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -77,4 +79,30 @@ func TestClientNodeSubscriptionValidation(t *testing.T) {
 	}
 	require.NoError(t, svc.SetClientNodeSubscription(context.Background(), "proxies:\n  - name: edge\n    port: 443\n"))
 	require.Equal(t, 1, repo.writes)
+}
+
+func TestClientNodeLegacyPolicyAndSubscriptionFallback(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("proxies:\n  - name: edge\n    port: 443\n"))
+	}))
+	defer server.Close()
+	repo := &clientNodeRepo{values: map[string]string{
+		legacyClientNodePolicyKey: `{"enabled":true,"disabled_nodes":["retired"],"subscription_url":"http://127.0.0.1:1/unavailable","backup_subscription_urls":["` + server.URL + `"]}`,
+	}}
+	svc := &SettingService{settingRepo: repo}
+	policy, err := svc.GetClientNodePolicy(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, &ClientNodePolicy{Enabled: true, DisabledNodes: []string{"retired"}}, policy)
+	content, err := svc.GetClientNodeSubscription(context.Background())
+	require.NoError(t, err)
+	require.Contains(t, content, "name: edge")
+
+	repo.values[clientNodePolicyKey] = `{"enabled":false,"disabled_nodes":[]}`
+	repo.values[clientNodeSubscriptionKey] = "proxies: []\n"
+	policy, err = svc.GetClientNodePolicy(context.Background())
+	require.NoError(t, err)
+	require.False(t, policy.Enabled)
+	content, err = svc.GetClientNodeSubscription(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "proxies: []\n", content)
 }

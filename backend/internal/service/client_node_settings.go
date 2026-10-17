@@ -6,7 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/url"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -14,8 +17,16 @@ import (
 const (
 	clientNodePolicyKey       = "client_node_policy"
 	clientNodeSubscriptionKey = "client_node_subscription"
+	legacyClientNodePolicyKey = "client_node_global_policy"
 	MaxClientNodeContentSize  = 1 << 20
 )
+
+type legacyClientNodePolicy struct {
+	Enabled                bool     `json:"enabled"`
+	DisabledNodes          []string `json:"disabled_nodes"`
+	SubscriptionURL        string   `json:"subscription_url"`
+	BackupSubscriptionURLs []string `json:"backup_subscription_urls"`
+}
 
 type ClientNodePolicy struct {
 	Enabled       bool     `json:"enabled"`
@@ -25,7 +36,17 @@ type ClientNodePolicy struct {
 func (s *SettingService) GetClientNodePolicy(ctx context.Context) (*ClientNodePolicy, error) {
 	raw, err := s.settingRepo.GetValue(ctx, clientNodePolicyKey)
 	if errors.Is(err, ErrSettingNotFound) {
-		return &ClientNodePolicy{DisabledNodes: []string{}}, nil
+		legacy, legacyErr := s.getLegacyClientNodePolicy(ctx)
+		if legacyErr != nil {
+			return nil, legacyErr
+		}
+		if legacy == nil {
+			return &ClientNodePolicy{DisabledNodes: []string{}}, nil
+		}
+		if legacy.DisabledNodes == nil {
+			legacy.DisabledNodes = []string{}
+		}
+		return &ClientNodePolicy{Enabled: legacy.Enabled, DisabledNodes: legacy.DisabledNodes}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -60,9 +81,64 @@ func (s *SettingService) SetClientNodePolicy(ctx context.Context, policy ClientN
 func (s *SettingService) GetClientNodeSubscription(ctx context.Context) (string, error) {
 	raw, err := s.settingRepo.GetValue(ctx, clientNodeSubscriptionKey)
 	if errors.Is(err, ErrSettingNotFound) {
-		return "", nil
+		legacy, legacyErr := s.getLegacyClientNodePolicy(ctx)
+		if legacyErr != nil || legacy == nil {
+			return "", legacyErr
+		}
+		if strings.TrimSpace(legacy.SubscriptionURL) == "" && len(legacy.BackupSubscriptionURLs) == 0 {
+			return "", nil
+		}
+		for _, address := range append([]string{legacy.SubscriptionURL}, legacy.BackupSubscriptionURLs...) {
+			content, fetchErr := fetchLegacyClientNodeSubscription(ctx, address)
+			if fetchErr == nil {
+				return content, nil
+			}
+		}
+		return "", fmt.Errorf("client node subscription is unavailable")
 	}
 	return raw, err
+}
+
+func (s *SettingService) getLegacyClientNodePolicy(ctx context.Context) (*legacyClientNodePolicy, error) {
+	raw, err := s.settingRepo.GetValue(ctx, legacyClientNodePolicyKey)
+	if errors.Is(err, ErrSettingNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var policy legacyClientNodePolicy
+	if err := json.Unmarshal([]byte(raw), &policy); err != nil {
+		return nil, fmt.Errorf("invalid stored legacy client node policy: %w", err)
+	}
+	return &policy, nil
+}
+
+func fetchLegacyClientNodeSubscription(ctx context.Context, address string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(address))
+	if err != nil || parsed == nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" || parsed.User != nil {
+		return "", fmt.Errorf("invalid legacy subscription address")
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
+	if err != nil {
+		return "", err
+	}
+	client := &http.Client{Timeout: 12 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	response, err := client.Do(request)
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("subscription returned status %d", response.StatusCode)
+	}
+	content, err := io.ReadAll(io.LimitReader(response.Body, MaxClientNodeContentSize+1))
+	if err != nil || len(content) > MaxClientNodeContentSize || len(strings.TrimSpace(string(content))) == 0 {
+		return "", fmt.Errorf("invalid legacy subscription response")
+	}
+	return string(content), nil
 }
 
 func (s *SettingService) SetClientNodeSubscription(ctx context.Context, content string) error {

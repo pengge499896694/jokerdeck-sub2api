@@ -1,5 +1,13 @@
 # v0.2.17 升级 & 无感部署说明
 
+> 2026-10-17 更正：首次切换 v0.2.17 后，客户端节点设置不兼容，已按要求回滚。
+> 本文以下首次部署的“成功”记录只是当时的检查结果，不代表客户端节点功能已验证。
+> 当前实际 upstream 应以 `docker exec edge-nginx nginx -T` 和线上请求为准，
+> 不能仅凭宿主机配置文件或容器健康状态判断。
+> v0.2.17 修正版增加了 `client_node_global_policy`（启用、禁用节点、主/备订阅地址）
+> 到新接口的只读兼容，新版静态 YAML 设置仍优先；旧容器必须保留供回滚。
+> 修正版启动时额外执行了 `188_add_usage_log_thread_id.sql`（迁移总数 301）。
+
 ## 一、本次升级做了什么
 
 把上游框架从 **v0.2.14 升到 v0.2.17**，二开功能全部保留。
@@ -257,9 +265,13 @@ nginx 5xx 计数：0      应用 ERROR/panic：0
 ### 回滚方式
 
 ```bash
-cp -a /opt/sub2api/backups/pre-v0217-20261017-040256/nginx.conf /opt/edge/nginx.conf
 docker start sub2api-v0216-nodes-20261015
-docker exec edge-nginx nginx -s reload
+# /opt/edge/nginx.conf 是文件 bind mount；不能用 cp / sed -i 替换宿主机 inode。
+# 先备份并确认配置，再原地写入 upstream；验证容器内的实际内容。
+# 修改前先确认 /opt/edge/nginx.conf 的真实路径、旧值和目标容器名。
+# docker exec edge-nginx nginx -t && docker exec edge-nginx nginx -s reload
+# docker exec edge-nginx nginx -T | grep sub2api_upstream
+# 如果挂载 inode 已经与宿主机脱节，重启 edge-nginx 后再验证真实 upstream。
 ```
 
 或直接用服务器上已安装的通用脚本：
@@ -270,7 +282,10 @@ docker exec edge-nginx nginx -s reload
 
 ### 遗留说明
 
-- 活动容器名保持 `sub2api-next`（nginx 指向它，名字稳定不动），
-  版本由镜像 tag 体现，便于后续继续用同一套流程发布。
-- `sub2api-v0216-nodes-20261015` 已停止但**未删除**，镜像与容器都保留，
-  确认稳定后可清理。
+- 首次切换后由于客户端节点配置不兼容，线上已回滚至
+  `sub2api-v0216-nodes-20261015`；不能以首次验证结果宣称新版已上线。
+- 修正版必须在预发布容器验证旧策略和订阅读取后才能切流；
+  `sub2api-v0216-nodes-20261015` 必须保持运行以便即时回滚。
+- 旧配置的主/备订阅 URL 仅在新版静态订阅尚未设置时生效；
+  管理员在新版保存静态 YAML 后，旧版不会读取该新键。回滚前应确认配置兼容性。
+- 上述早期 `300/300` 迁移对比仅适用于首版二进制；修正版包含额外迁移。
