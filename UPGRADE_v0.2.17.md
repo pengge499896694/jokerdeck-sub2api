@@ -197,3 +197,80 @@ upgrade/v0.2.17
 ```
 
 `backend/internal/web/dist` 已用 v0.2.17 前端重新构建并入库。
+
+---
+
+## 六、生产部署记录（已完成）
+
+**站点：** https://jokerdeck.de5.net
+**时间：** 2026-10-17
+**方式：** 蓝绿切换（edge-nginx upstream），**零停机**
+
+### 实际拓扑（与预想不同，已适配）
+
+```
+edge-nginx (容器, :80/:443)
+    └─ upstream sub2api-next:8080
+         └─ sub2api-next 容器 (v0.2.17)
+            网络：sub2api_private + public-proxy
+```
+
+- 生产原版本为 **v0.2.16**（不是 v0.2.14）
+- 前端代理是 **`edge-nginx` 容器**，配置挂在 `/opt/edge/nginx.conf`
+- 发布方式是**换二进制**：`FROM local/sub2api:<base>` + `COPY sub2api /app/sub2api`
+- 服务器架构 **x86_64**，二进制需交叉编译 `GOOS=linux GOARCH=amd64`，
+  且**必须带 `-tags embed`**（否则前端不嵌入，页面空白）
+
+### 执行步骤
+
+| 步骤 | 结果 |
+|---|---|
+| 交叉编译 v0.2.17 (linux/amd64, `-tags embed`) | ✅ 118MB，md5 `5241ac1f…` 双向校验一致 |
+| 上传 + 构建镜像 `local/sub2api:v0.2.17-jokerdeck-20261017` | ✅ 镜像内二进制 md5 一致 |
+| 备份 nginx.conf / env / pg_dump | ✅ `backups/pre-v0217-20261017-040256/db.sql` (101M, 107 表) |
+| 迁移集比对（生产 vs 新二进制） | ✅ **300/300 完全一致**，部署时不执行任何迁移 |
+| 起 `sub2api-next` + 健康检查 | ✅ healthy，0 重启 |
+| 切换 nginx upstream + 平滑 reload | ✅ 未重启 nginx，无丢连接 |
+| 验证后停旧容器 | ✅ 旧镜像保留可回滚 |
+
+### 部署后验证（全部通过）
+
+```
+/health                        -> 200
+/                              -> 200
+/login                         -> 200
+/api/v1/settings/public        -> 200
+/api/v1/recharge-terms         -> 401   (二开：充值条款)
+/api/v1/finance/users          -> 401   (二开：财务)
+/api/v1/self-channel-monitors  -> 401   (二开：自助监控)
+/api/v1/xianyu-recharge-orders -> 401   (二开：闲鱼充值)
+/api/v1/feedback/tickets       -> 401   (二开：反馈工单)
+/v1/messages                   -> 401   (中转网关正常，非 502)
+
+前端懒加载分块（二开页面）：
+FinanceView / SelfChannelMonitorView / StoreView /
+XianyuRechargeOrdersView / FeedbackView  -> 全部 200
+
+nginx 5xx 计数：0      应用 ERROR/panic：0
+```
+
+### 回滚方式
+
+```bash
+cp -a /opt/sub2api/backups/pre-v0217-20261017-040256/nginx.conf /opt/edge/nginx.conf
+docker start sub2api-v0216-nodes-20261015
+docker exec edge-nginx nginx -s reload
+```
+
+或直接用服务器上已安装的通用脚本：
+
+```bash
+/opt/sub2api/deploy.sh <新二进制路径> <版本标签>
+```
+
+### 遗留说明
+
+- 活动容器名保持 `sub2api-next`（nginx 指向它，名字稳定不动），
+  版本由镜像 tag 体现，便于后续继续用同一套流程发布。
+- `sub2api-v0216-nodes-20261015` 已停止但**未删除**，镜像与容器都保留，
+  确认稳定后可清理。
