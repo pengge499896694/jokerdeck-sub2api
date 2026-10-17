@@ -7,6 +7,8 @@
 > v0.2.17 修正版增加了 `client_node_global_policy`（启用、禁用节点、主/备订阅地址）
 > 到新接口的只读兼容，新版静态 YAML 设置仍优先；旧容器必须保留供回滚。
 > 修正版启动时额外执行了 `188_add_usage_log_thread_id.sql`（迁移总数 301）。
+> 兼容修正版 `e1a7b293a` 已本地编译并上传候选目录，尚未确认最终镜像或切流：
+> SSH 在密钥交换阶段超时。此时仍由 v0.2.16 处理线上请求。
 
 ## 一、本次升级做了什么
 
@@ -208,7 +210,7 @@ upgrade/v0.2.17
 
 ---
 
-## 六、生产部署记录（已完成）
+## 六、首次生产部署记录（已回滚）
 
 **站点：** https://jokerdeck.de5.net
 **时间：** 2026-10-17
@@ -241,7 +243,7 @@ edge-nginx (容器, :80/:443)
 | 切换 nginx upstream + 平滑 reload | ✅ 未重启 nginx，无丢连接 |
 | 验证后停旧容器 | ✅ 旧镜像保留可回滚 |
 
-### 部署后验证（全部通过）
+### 首次部署时的验证（未覆盖客户端节点功能）
 
 ```
 /health                        -> 200
@@ -279,6 +281,16 @@ docker start sub2api-v0216-nodes-20261015
 ```bash
 /opt/sub2api/deploy.sh <新二进制路径> <版本标签>
 ```
+
+### 客户端接口验收项
+
+- 使用正常登录的客户端会话核对 `GET /api/v1/client/node-policy` 返回旧配置的
+  `enabled` 与 `disabled_nodes`，并核对 `GET /api/v1/client/node-subscription` 返回可解析的原始 YAML。
+- 使用管理员会话核对 `GET /api/v1/admin/client/node-subscription` 的 `content`；
+  `PUT /api/v1/admin/client/nodes` 写入新格式后应立即反映在客户端读取结果中。
+- 未登录请求返回 401 只能证明授权门禁存在，**不能**证明旧配置被正确下发。
+- 切流时必须核对 nginx 容器内 10 处 upstream、公开站点健康检查及真实中转请求，
+  并保留旧容器运行，直至客户端节点验收完成。
 
 ### 遗留说明
 
