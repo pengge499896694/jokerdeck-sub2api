@@ -1,3 +1,4 @@
+import clientNodesAPI from './clientNodes'
 /**
  * Admin API barrel export
  * Centralized exports for all admin API modules
@@ -42,6 +43,7 @@ import feedbackAPI from './feedback'
  * Unified admin API object for convenient access
  */
 export const adminAPI = {
+  clientNodes: clientNodesAPI,
   dashboard: dashboardAPI,
   users: usersAPI,
   groups: groupsAPI,

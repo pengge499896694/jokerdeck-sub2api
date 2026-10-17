@@ -9,6 +9,7 @@ export default {
       },
       description: 'Manage registration, email verification, default values, and SMTP settings',
       tabs: {
+        clientNodes: 'Client Nodes',
         general: 'General',
         agreement: 'Agreement',
         features: 'Feature Switches',

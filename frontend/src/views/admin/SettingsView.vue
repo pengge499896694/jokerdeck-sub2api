@@ -44,6 +44,10 @@
           </nav>
         </div>
 
+        <div v-show="activeTab === 'clientNodes'" class="card p-6">
+          <ClientNodesPanel />
+        </div>
+
         <!-- Tab: Security — Admin API Key -->
         <div v-show="activeTab === 'security'" class="space-y-6">
           <!-- Admin API Key Settings -->
@@ -8903,7 +8907,7 @@
         </div>
 
         <!-- Save Button -->
-        <div v-show="activeTab !== 'backup'" class="flex justify-end">
+        <div v-show="activeTab !== 'backup' && activeTab !== 'clientNodes'" class="flex justify-end">
           <button
             type="submit"
             :disabled="saving || loadFailed"
@@ -9014,6 +9018,7 @@ import type {
 } from "@/types";
 import type { ProviderInstance } from "@/types/payment";
 import AppLayout from "@/components/layout/AppLayout.vue";
+import ClientNodesPanel from "./settings/ClientNodesPanel.vue";
 import ClientProviderPolicy from "@/components/admin/ClientProviderPolicy.vue";
 import Icon from "@/components/icons/Icon.vue";
 import Select, { type SelectOption } from "@/components/common/Select.vue";
@@ -9093,6 +9098,7 @@ const paymentMethodsHref = computed(() =>
 );
 
 type SettingsTab =
+  | "clientNodes"
   | "general"
   | "agreement"
   | "features"
@@ -9104,6 +9110,7 @@ type SettingsTab =
   | "backup";
 const activeTab = ref<SettingsTab>("general");
 const settingsTabs = [
+  { key: "clientNodes" as SettingsTab, icon: "server" as const },
   { key: "general" as SettingsTab, icon: "home" as const },
   { key: "agreement" as SettingsTab, icon: "document" as const },
   { key: "features" as SettingsTab, icon: "bolt" as const },

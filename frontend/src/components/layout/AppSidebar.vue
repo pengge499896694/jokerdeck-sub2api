@@ -158,12 +158,6 @@
       </template>
     </nav>
 
-    <!-- Client Download -->
-    <a href="https://jokerdeck.de5.net/client-site/" target="_blank" rel="noopener noreferrer" class="sidebar-link mb-2 w-full" :title="sidebarCollapsed ? '下载客户端' : undefined">
-      <span class="h-5 w-5 flex-shrink-0 text-center">↓</span>
-      <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }">下载客户端</span>
-    </a>
-
     <!-- Bottom Section -->
     <div class="mt-auto border-t border-gray-100 p-3 dark:border-dark-800">
       <!-- Theme Toggle -->

@@ -255,6 +255,8 @@ func RegisterAuthRoutes(
 	// 面板全局按用户限流
 	authenticated.Use(panelRateLimiter.Global())
 	{
+		authenticated.GET("/client/node-policy", h.Setting.GetClientNodePolicy)
+		authenticated.GET("/client/node-subscription", h.Setting.GetClientNodeSubscription)
 		authenticated.GET("/auth/me", h.Auth.GetCurrentUser)
 		// 撤销所有会话（需要认证）
 		authenticated.POST("/auth/revoke-all-sessions", h.Auth.RevokeAllSessions)
