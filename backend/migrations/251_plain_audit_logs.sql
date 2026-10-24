@@ -1,0 +1,1 @@
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS request_body_plain TEXT NOT NULL DEFAULT '';

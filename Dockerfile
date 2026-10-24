@@ -23,6 +23,7 @@ FROM --platform=${BUILDPLATFORM} ${NODE_IMAGE} AS frontend-builder
 ARG NPM_CONFIG_REGISTRY
 
 WORKDIR /app/frontend
+ENV CI=true
 
 # Install the pnpm version used to generate the current lockfile.
 RUN corepack enable && corepack prepare pnpm@11.7.0 --activate

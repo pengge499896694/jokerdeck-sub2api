@@ -82,6 +82,26 @@ func TestGetNonceFromContext(t *testing.T) {
 }
 
 func TestSecurityHeaders(t *testing.T) {
+	t.Run("canvas_app_allows_only_same_origin_embedding", func(t *testing.T) {
+		cfg := config.CSPConfig{Enabled: true, Policy: "default-src 'self'; frame-ancestors 'none'; script-src 'self' __CSP_NONCE__"}
+		middleware := SecurityHeaders(cfg, nil)
+		for _, path := range []string{"/infinite-canvas/", "/infinite-canvas/canvas/example", "/infinite-canvas/assets/app.js"} {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodGet, path, nil)
+			middleware(c)
+			assert.Equal(t, "SAMEORIGIN", w.Header().Get("X-Frame-Options"))
+			assert.Contains(t, w.Header().Get("Content-Security-Policy"), "frame-ancestors 'self'")
+			assert.NotContains(t, w.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'")
+		}
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/admin", nil)
+		middleware(c)
+		assert.Equal(t, "DENY", w.Header().Get("X-Frame-Options"))
+		assert.Contains(t, w.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'")
+	})
+
 	t.Run("sets_basic_security_headers", func(t *testing.T) {
 		cfg := config.CSPConfig{Enabled: false}
 		middleware := SecurityHeaders(cfg, nil)

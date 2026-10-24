@@ -46,6 +46,7 @@ type AdminHandlers struct {
 	Compliance             *admin.ComplianceHandler
 	AuditLog               *admin.AuditLogHandler
 	XianyuRecharge         *admin.XianyuRechargeHandler
+	ConversationLog        *ConversationLogHandler
 }
 
 // Handlers contains all HTTP handlers
@@ -74,6 +75,8 @@ type Handlers struct {
 	AsyncImage       *AsyncImageHandler
 	BatchImage       *BatchImageHandler
 	XianyuRecharge   *XianyuRechargeHandler
+	ConversationLog  *ConversationLogHandler
+	Canvas           *CanvasHandler
 }
 
 // BuildInfo contains build-time information

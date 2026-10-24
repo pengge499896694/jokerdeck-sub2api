@@ -1780,6 +1780,16 @@ func (s *OpenAIGatewayService) newOpenAIStreamFailoverErrorWithModel(
 		classificationHeaders = nil
 	}
 	failoverErr := s.newOpenAIAccountFailoverErrorWithClassificationHeaders(account, statusCode, headers, classificationHeaders, payload, message, shouldDisable, retryableOnSameAccount)
+	// A generic response.failed frame is not automatically a transport retry:
+	// only replay known request-capacity signals or a stream that broke before
+	// the client received semantic output. Preserve explicit pool-mode policy.
+	if len(payload) > 0 && !isOpenAIUpstreamCapacityShedEvent(payload) {
+		failoverErr.ForceSameAccountRetry = false
+		failoverErr.SameAccountRetryMax = 0
+		if failoverErr.SameAccountRetryDeadline.IsZero() {
+			failoverErr.RetryableOnSameAccount = retryableOnSameAccount
+		}
+	}
 	if failoverErr.IsCredentialFailure() || failoverErr.RequestScopedTransient {
 		return failoverErr
 	}

@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>服务器 SSH 连接与发版教程</title>
+  <style>
+    :root{--ink:#202a34;--muted:#68767d;--line:#dde6e5;--green:#087e73;--green-soft:#eaf6f2;--bg:#f7faf9;--dark:#182321;--code:#17211f}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.7 system-ui,-apple-system,"Microsoft YaHei",sans-serif}
+    a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}.shell{max-width:1120px;margin:auto;padding:28px 24px 70px}
+    .hero{display:grid;grid-template-columns:1.05fr .95fr;gap:42px;align-items:center;padding:35px 0 45px;border-bottom:1px solid var(--line)}.eyebrow{color:var(--green);font-weight:750;font-size:11px;letter-spacing:1.2px}.hero h1{font-size:38px;line-height:1.18;margin:12px 0}.lead{color:var(--muted);font-size:17px;max-width:600px}.hero-actions{display:flex;gap:10px;margin-top:24px}.btn{display:inline-block;padding:10px 15px;border-radius:5px;font-weight:700;font-size:14px}.primary{color:white;background:var(--green)}.secondary{color:var(--ink);border:1px solid #cbd8d5;background:white}
+    .server-card{background:var(--dark);color:#dce9e5;border-radius:8px;padding:20px;box-shadow:0 16px 35px #18332d18}.server-card .top{display:flex;align-items:center;gap:8px;color:#a8bbb5;font-size:12px}.dot{width:9px;height:9px;border-radius:50%;background:#3fc49d}.server-card strong{display:block;color:white;font-size:23px;margin:16px 0 4px}.server-card code{color:#8ed8c0}.server-card pre{margin:18px 0 0;color:#b5c7c2;font-size:12px;white-space:pre-wrap}
+    .layout{display:grid;grid-template-columns:180px minmax(0,1fr);gap:50px;padding-top:35px}.toc{position:sticky;top:20px;align-self:start;display:flex;flex-direction:column;gap:11px;font-size:13px}.toc b{margin-bottom:4px}.toc a{color:var(--muted)}.section{scroll-margin-top:20px;padding-bottom:45px}.section-title{display:flex;gap:13px;align-items:flex-start;margin-bottom:21px}.num{background:var(--green-soft);color:var(--green);font-weight:800;font-size:12px;padding:5px 8px;border-radius:4px}.section h2{font-size:23px;line-height:1.25;margin:0 0 4px}.section-title p{margin:0;color:var(--muted);font-size:14px}.step{position:relative;padding:0 0 22px 26px;border-left:1px solid #bdd3cd}.step:last-child{padding-bottom:4px}.step:before{content:"";position:absolute;left:-5px;top:7px;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px var(--bg)}.step h3{margin:0;font-size:16px}.step p{margin:5px 0;color:var(--muted);font-size:14px}
+    .code-wrap{position:relative;margin:11px 0 0}.code-wrap pre{margin:0;padding:16px 48px 16px 16px;overflow:auto;border-radius:5px;background:var(--code);color:#d8e9e2;font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace}.copy{position:absolute;right:8px;top:8px;border:1px solid #58726a;border-radius:4px;background:#263b35;color:#d7eee6;padding:4px 7px;cursor:pointer;font-size:11px}.copy:hover{background:#34554a}.note{padding:13px 15px;border-left:3px solid var(--green);background:var(--green-soft);color:#44615a;font-size:13px;margin-top:18px}.warning{border-left-color:#c58a24;background:#fff8e7;color:#70551e}
+    .checklist{display:grid;grid-template-columns:1fr 1fr;gap:10px}.check{padding:13px 14px;background:white;border:1px solid var(--line);border-radius:5px;font-size:13px}.check b{display:block;margin-bottom:3px}.check span{color:var(--muted)}.footer{border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between}
+    @media(max-width:780px){.hero{grid-template-columns:1fr;gap:24px}.hero h1{font-size:31px}.layout{grid-template-columns:1fr;gap:20px}.toc{position:static;flex-direction:row;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:14px}.toc b{width:100%}.checklist{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <div>
+        <div class="eyebrow">SUB2API · SERVER OPERATIONS</div>
+        <h1>SSH 连接与 Docker 发版</h1>
+        <p class="lead">给服务器配置一次密钥登录，之后就可以稳定地检查服务、更新代码、重启容器和查看日志。</p>
+        <div class="hero-actions"><a class="btn primary" href="#key">开始配置</a><a class="btn secondary" href="#release">查看发版流程</a></div>
+      </div>
+      <div class="server-card"><div class="top"><i class="dot"></i>目标服务器 · 可持续连接</div><strong>123.56.108.167</strong><span>SSH 别名：<code>jokerdeck-prod</code></span><pre>$ ssh jokerdeck-prod
+deploy@server:~$ docker compose ps
+NAME       STATUS
+sub2api    running</pre></div>
+    </header>
+
+    <div class="layout">
+      <nav class="toc"><b>教程目录</b><a href="#key">1. 创建 SSH 密钥</a><a href="#user">2. 配置部署用户</a><a href="#config">3. 设置连接别名</a><a href="#release">4. Docker 发版</a><a href="#security">5. 安全检查</a></nav>
+      <main>
+        <section id="key" class="section">
+          <div class="section-title"><span class="num">01</span><div><h2>创建 SSH 密钥</h2><p>在你的 Mac 本机执行，私钥只保存在本机。</p></div></div>
+          <div class="step"><h3>检查是否已有密钥</h3><div class="code-wrap"><pre><code>ls -la ~/.ssh</code></pre><button class="copy">复制</button></div><p>如果已经有 <code>id_ed25519</code> 和 <code>id_ed25519.pub</code>，可以直接复用。</p></div>
+          <div class="step"><h3>没有密钥时创建一对</h3><div class="code-wrap"><pre><code>ssh-keygen -t ed25519 -C "jokerdeck-deploy"</code></pre><button class="copy">复制</button></div><p>一路回车即可。私钥是 <code>~/.ssh/id_ed25519</code>，公钥是 <code>~/.ssh/id_ed25519.pub</code>。</p></div>
+          <div class="step"><h3>首次把公钥放到服务器</h3><div class="code-wrap"><pre><code>ssh-copy-id root@123.56.108.167</code></pre><button class="copy">复制</button></div><p>这里只需要输入一次服务器密码。之后使用密钥登录，不要把密码发给任何人。</p></div>
+          <div class="note warning"><b>注意：</b>不要复制或上传 <code>id_ed25519</code> 私钥。只需要传输以 <code>.pub</code> 结尾的公钥。</div>
+        </section>
+
+        <section id="user" class="section">
+          <div class="section-title"><span class="num">02</span><div><h2>配置专用部署用户</h2><p>登录服务器后执行，建议不要长期使用 root 发版。</p></div></div>
+          <div class="code-wrap"><pre><code># 阿里云/CentOS/Rocky/AlmaLinux 通常使用 wheel 组
+usermod -aG docker deploy
+usermod -aG wheel deploy
+
+# 如果系统没有 sudo 命令，再安装它
+dnf install -y sudo 2&gt;/dev/null || yum install -y sudo</code></pre><button class="copy">复制</button></div>
+          <p class="note">你的服务器提示「group 'sudo' does not exist」，说明它使用的是 RHEL 系列权限约定。Ubuntu/Debian 使用 <code>sudo</code> 组；阿里云/CentOS 系统使用 <code>wheel</code> 组。修改组后重新登录，组权限才会生效。</p>
+          <div class="code-wrap"><pre><code>ssh-copy-id deploy@123.56.108.167
+ssh deploy@123.56.108.167</code></pre><button class="copy">复制</button></div>
+        </section>
+
+        <section id="config" class="section">
+          <div class="section-title"><span class="num">03</span><div><h2>设置 SSH 连接别名</h2><p>之后不需要反复输入 IP、用户名和密钥路径。</p></div></div>
+          <div class="code-wrap"><pre><code>mkdir -p ~/.ssh
+chmod 700 ~/.ssh
+cat >> ~/.ssh/config &lt;&lt;'EOF'
+Host jokerdeck-prod
+  HostName 123.56.108.167
+  User deploy
+  IdentityFile ~/.ssh/id_ed25519
+  ServerAliveInterval 30
+  ServerAliveCountMax 3
+EOF
+chmod 600 ~/.ssh/config</code></pre><button class="copy">复制</button></div>
+          <div class="code-wrap"><pre><code>ssh jokerdeck-prod</code></pre><button class="copy">复制</button></div>
+          <p class="note">我后续连接服务器时使用的就是这个别名。每次命令都会重新建立 SSH 连接，电脑重启后也可以继续使用。</p>
+        </section>
+
+        <section id="release" class="section">
+          <div class="section-title"><span class="num">04</span><div><h2>Docker 发版流程</h2><p>项目代码已经在服务器上的情况下，可以按这个顺序操作。</p></div></div>
+          <div class="code-wrap"><pre><code># 登录服务器
+ssh jokerdeck-prod
+
+# 进入项目目录
+cd /opt/jokerdeck-sub2api
+
+# 拉取最新代码
+git pull --ff-only
+
+# 更新并后台启动服务
+docker compose -f deploy/docker-compose.yml up -d
+
+# 查看容器状态
+docker compose -f deploy/docker-compose.yml ps
+
+# 查看应用日志
+docker compose -f deploy/docker-compose.yml logs -f sub2api</code></pre><button class="copy">复制</button></div>
+          <div class="note"><b>推荐检查：</b>发版后先访问 <code>http://服务器地址/health</code>，确认返回健康状态，再打开网页和客户端。</div>
+        </section>
+
+        <section id="security" class="section">
+          <div class="section-title"><span class="num">05</span><div><h2>安全检查</h2><p>配置完成后确认以下项目。</p></div></div>
+          <div class="checklist"><div class="check"><b>SSH 密钥登录</b><span>能使用 <code>ssh jokerdeck-prod</code> 登录。</span></div><div class="check"><b>禁止暴露私钥</b><span>私钥权限为 600，且没有上传到 Git。</span></div><div class="check"><b>防火墙</b><span>只开放必要的 SSH、HTTP、HTTPS 端口。</span></div><div class="check"><b>数据持久化</b><span>数据库和 Redis 使用持久化目录或 Docker volume。</span></div><div class="check"><b>备份</b><span>发版前保留数据库和 <code>deploy/.env</code> 备份。</span></div><div class="check"><b>权限</b><span>部署用户只执行必要的维护操作。</span></div></div>
+          <div class="note warning"><b>不要做：</b>不要把服务器密码、SSH 私钥、JWT_SECRET、数据库密码或 API Key 粘贴到聊天、工单和截图中。</div>
+        </section>
+        <footer class="footer"><span>Sub2API 服务器运维教程</span><a href="#key">回到顶部 ↑</a></footer>
+      </main>
+    </div>
+  </div>
+  <script>
+    document.querySelectorAll('.copy').forEach(button=>button.addEventListener('click',async()=>{const text=button.previousElementSibling.innerText;try{await navigator.clipboard.writeText(text);button.textContent='已复制';setTimeout(()=>button.textContent='复制',1200)}catch{button.textContent='复制失败'}}));
+  </script>
+</body>
+</html>

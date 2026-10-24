@@ -66,6 +66,22 @@
         />
         <p class="input-hint">{{ t('admin.users.form.rpmLimitHint') }}</p>
       </div>
+      <div class="rounded-xl border border-gray-200 p-4 dark:border-dark-700">
+        <label class="flex cursor-pointer items-start gap-3">
+          <input
+            v-model="canViewAllConversationLogs"
+            type="checkbox"
+            class="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            :disabled="loadingMenuPermissions"
+            data-testid="conversation-log-permission"
+          />
+          <span>
+            <span class="block text-sm font-medium text-gray-900 dark:text-gray-100">查看全部对话记录</span>
+            <span class="mt-1 block text-xs text-gray-500 dark:text-gray-400">允许此账号查看所有用户的真实问题和 AI 回复，适合单独授权给财务人员。</span>
+          </span>
+        </label>
+        <p v-if="loadingMenuPermissions" class="mt-2 text-xs text-gray-500 dark:text-gray-400">正在读取菜单权限…</p>
+      </div>
       <UserAttributeForm v-model="form.customAttributes" :user-id="user?.id" />
     </form>
     <template #footer>
@@ -124,6 +140,24 @@ watch(() => props.user, (u) => {
   }
 }, { immediate: true })
 
+const canViewAllConversationLogs = ref(false)
+const loadingMenuPermissions = ref(false)
+watch([() => props.show, () => props.user?.id], async ([show, userId]) => {
+  canViewAllConversationLogs.value = false
+  if (!show || !userId) return
+  loadingMenuPermissions.value = true
+  try {
+    const result = await adminAPI.users.getMenuPermissions(userId)
+    if (props.user?.id === userId) {
+      canViewAllConversationLogs.value = result.menu_permissions.includes('conversation_logs.view_all')
+    }
+  } catch (error: any) {
+    appStore.showError(error?.message || '读取菜单权限失败')
+  } finally {
+    loadingMenuPermissions.value = false
+  }
+})
+
 const generatePassword = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%^&*'
   let p = ''; for (let i = 0; i < 16; i++) p += chars.charAt(Math.floor(Math.random() * chars.length))
@@ -154,6 +188,7 @@ const handleUpdateUser = async () => {
     if (form.password.trim()) data.password = form.password.trim()
     // 提升为管理员属敏感操作：后端返回 STEP_UP_REQUIRED 时弹 TOTP 验证并重试
     await stepUp.run(() => adminAPI.users.update(userId, data))
+    await adminAPI.users.updateMenuPermissions(userId, canViewAllConversationLogs.value ? ['conversation_logs.view_all'] : [])
     if (Object.keys(form.customAttributes).length > 0) await adminAPI.userAttributes.updateUserAttributeValues(userId, form.customAttributes)
     appStore.showSuccess(t('admin.users.userUpdated'))
     emit('success'); emit('close')

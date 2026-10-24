@@ -119,6 +119,11 @@ func SecurityHeaders(cfg config.CSPConfig, getFrameSrcOrigins func() []string) g
 
 	return func(c *gin.Context) {
 		finalPolicy := policy
+		canvasApp := c.Request != nil && c.Request.URL != nil &&
+			(c.Request.URL.Path == "/infinite-canvas" || strings.HasPrefix(c.Request.URL.Path, "/infinite-canvas/"))
+		if canvasApp {
+			finalPolicy = replaceCSPDirective(finalPolicy, "frame-ancestors", "'self'")
+		}
 		if getFrameSrcOrigins != nil {
 			for _, origin := range getFrameSrcOrigins() {
 				if origin != "" {
@@ -128,7 +133,11 @@ func SecurityHeaders(cfg config.CSPConfig, getFrameSrcOrigins func() []string) g
 		}
 
 		c.Header("X-Content-Type-Options", "nosniff")
-		c.Header("X-Frame-Options", "DENY")
+		if canvasApp {
+			c.Header("X-Frame-Options", "SAMEORIGIN")
+		} else {
+			c.Header("X-Frame-Options", "DENY")
+		}
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
 		if isAPIRoutePath(c) {
 			c.Next()
@@ -149,6 +158,18 @@ func SecurityHeaders(cfg config.CSPConfig, getFrameSrcOrigins func() []string) g
 		}
 		c.Next()
 	}
+}
+
+func replaceCSPDirective(policy, directive, value string) string {
+	parts := strings.Split(policy, ";")
+	for i, part := range parts {
+		fields := strings.Fields(part)
+		if len(fields) > 0 && fields[0] == directive {
+			parts[i] = " " + directive + " " + value
+			return strings.TrimSpace(strings.Join(parts, ";"))
+		}
+	}
+	return addToDirective(policy, directive, value)
 }
 
 func isAPIRoutePath(c *gin.Context) bool {

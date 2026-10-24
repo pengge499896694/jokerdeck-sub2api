@@ -108,9 +108,12 @@ func sameAccountRetryDeadlineAllows(failoverErr *service.UpstreamFailoverError) 
 	return failoverErr == nil || failoverErr.SameAccountRetryDeadline.IsZero() || time.Now().Before(failoverErr.SameAccountRetryDeadline)
 }
 
-// effectiveSameAccountRetryLimit applies an error-specific cap without
-// overriding an explicit account setting of zero (which disables retries).
+// effectiveSameAccountRetryLimit applies error-specific bounds while keeping
+// explicit account retry settings authoritative unless the error forces retries.
 func effectiveSameAccountRetryLimit(failoverErr *service.UpstreamFailoverError, account *service.Account) int {
+	if failoverErr != nil && failoverErr.ForceSameAccountRetry {
+		return failoverErr.SameAccountRetryMax
+	}
 	if account == nil {
 		return 0
 	}

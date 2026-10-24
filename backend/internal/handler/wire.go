@@ -53,6 +53,7 @@ func ProvideAdminHandlers(
 	upstreamBillingProbe *service.UpstreamBillingProbeService,
 	ollamaCloudUsage *service.OllamaCloudUsageService,
 	opencodeGoUsage *service.OpenCodeGoUsageService,
+	conversationLogHandler *ConversationLogHandler,
 ) *AdminHandlers {
 	accountHandler.SetUpstreamBillingProbeService(upstreamBillingProbe)
 	accountHandler.SetOllamaCloudUsageService(ollamaCloudUsage)
@@ -96,6 +97,7 @@ func ProvideAdminHandlers(
 		Compliance:             complianceHandler,
 		AuditLog:               auditLogHandler,
 		XianyuRecharge:         xianyuRechargeHandler,
+		ConversationLog:        conversationLogHandler,
 	}
 }
 
@@ -213,6 +215,8 @@ func ProvideHandlers(
 	asyncImageHandler *AsyncImageHandler,
 	batchImageHandler *BatchImageHandler,
 	xianyuRechargeHandler *XianyuRechargeHandler,
+	conversationLogHandler *ConversationLogHandler,
+	canvasHandler *CanvasHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 	_ *service.OpenAIQuotaAutoResetService,
@@ -242,6 +246,8 @@ func ProvideHandlers(
 		AsyncImage:       asyncImageHandler,
 		BatchImage:       batchImageHandler,
 		XianyuRecharge:   xianyuRechargeHandler,
+		ConversationLog:  conversationLogHandler,
+		Canvas:           canvasHandler,
 	}
 }
 
@@ -271,6 +277,8 @@ var ProviderSet = wire.NewSet(
 	NewAsyncImageHandler,
 	ProvideBatchImageHandler,
 	NewXianyuRechargeHandler,
+	NewConversationLogHandler,
+	NewCanvasHandler,
 
 	// Admin handlers
 	admin.NewDashboardHandler,

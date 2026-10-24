@@ -19,6 +19,9 @@ declare module 'vue-router' {
      */
     requiresAdmin?: boolean
 
+    /** Whether this route requires the separately granted conversation log menu permission. */
+    requiresConversationLogsAccess?: boolean
+
     /**
      * Page title for this route
      */

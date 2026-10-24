@@ -217,6 +217,19 @@ export async function toggleStatus(id: number, status: 'active' | 'disabled'): P
   return update(id, { status })
 }
 
+/** Read or replace the per-user menu permissions managed by administrators. */
+export async function getMenuPermissions(id: number): Promise<{ menu_permissions: string[] }> {
+  const { data } = await apiClient.get<{ menu_permissions: string[] }>(`/admin/users/${id}/menu-permissions`)
+  return data
+}
+
+export async function updateMenuPermissions(id: number, menuPermissions: string[]): Promise<{ menu_permissions: string[] }> {
+  const { data } = await apiClient.put<{ menu_permissions: string[] }>(`/admin/users/${id}/menu-permissions`, {
+    menu_permissions: menuPermissions
+  })
+  return data
+}
+
 /**
  * Get user's API keys
  * @param id - User ID
@@ -415,6 +428,8 @@ export const usersAPI = {
   batchUpdateLimits,
   toggleStatus,
   getUserApiKeys,
+  getMenuPermissions,
+  updateMenuPermissions,
   getUserUsageStats,
   getUserBalanceHistory,
   replaceGroup,

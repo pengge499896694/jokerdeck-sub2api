@@ -1,0 +1,115 @@
+#!/bin/sh
+set -eu
+
+state=${FAKE_DOCKER_STATE:?FAKE_DOCKER_STATE is required}
+events=${FAKE_DOCKER_EVENTS:?FAKE_DOCKER_EVENTS is required}
+containers="$state/containers"
+running="$state/running"
+managed="$state/managed"
+
+has_line() {
+  grep -Fqx -- "$2" "$1" 2>/dev/null
+}
+
+append_line() {
+  has_line "$1" "$2" || printf '%s\n' "$2" >> "$1"
+}
+
+remove_line() {
+  file=$1
+  value=$2
+  grep -Fvx -- "$value" "$file" > "$file.tmp" || true
+  mv "$file.tmp" "$file"
+}
+
+event() { printf 'docker %s\n' "$*" >> "$events"; }
+
+command=${1:-}
+shift || true
+case "$command" in
+  image)
+    event "image $*"
+    [ "${1:-}" = inspect ]
+    ;;
+  run)
+    name=
+    app_label=false
+    role_label=false
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --name) name=$2; shift 2 ;;
+        --label)
+          case "$2" in
+            com.jokerdeck.sub2api.app=*) app_label=true ;;
+            com.jokerdeck.sub2api.role=app) role_label=true ;;
+          esac
+          shift 2
+          ;;
+        *) shift ;;
+      esac
+    done
+    [ -n "$name" ] || exit 2
+    event "run $name"
+    append_line "$containers" "$name"
+    append_line "$running" "$name"
+    if [ "$app_label" = true ] && [ "$role_label" = true ]; then
+      append_line "$managed" "$name"
+    fi
+    printf 'fake-container-id\n'
+    ;;
+  exec)
+    name=$1
+    event "exec $name"
+    has_line "$running" "$name"
+    ;;
+  inspect)
+    event "inspect $*"
+    printf 'true\n'
+    ;;
+  logs)
+    event "logs $*"
+    ;;
+  ps)
+    filtered_managed=false
+    for arg do
+      case "$arg" in
+        label=com.jokerdeck.sub2api.managed=true) filtered_managed=true ;;
+      esac
+    done
+    if [ "$filtered_managed" = true ]; then
+      cat "$managed"
+    else
+      cat "$containers"
+    fi
+    ;;
+  stop)
+    for arg do name=$arg; done
+    event "stop $*"
+    remove_line "$running" "$name"
+    ;;
+  rm)
+    force=false
+    name=
+    for arg do
+      case "$arg" in
+        -f) force=true ;;
+        *) name=$arg ;;
+      esac
+    done
+    event "rm $*"
+    if [ "$force" != true ] && has_line "$running" "$name"; then exit 1; fi
+    remove_line "$containers" "$name"
+    remove_line "$running" "$name"
+    remove_line "$managed" "$name"
+    ;;
+  start)
+    name=$1
+    event "start $name"
+    append_line "$running" "$name"
+    ;;
+  *)
+    event "unexpected $command $*"
+    printf 'unexpected fake docker command: %s\n' "$command" >&2
+    exit 2
+    ;;
+esac

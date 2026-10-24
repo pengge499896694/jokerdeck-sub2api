@@ -150,13 +150,17 @@ func (s *OpenAIGatewayService) handleOpenAIUpstreamTransportError(ctx context.Co
 		return err
 	}
 
-	if classifyUpstreamTransportError(err).Persistent {
+	transportClass := classifyUpstreamTransportError(err)
+	if transportClass.Persistent {
 		s.tempUnscheduleOpenAITransportError(ctx, account, safeErr)
 	}
 
 	return &UpstreamFailoverError{
-		StatusCode:   http.StatusBadGateway,
-		ResponseBody: openAITransportFailoverBody,
+		StatusCode:             http.StatusBadGateway,
+		ResponseBody:           openAITransportFailoverBody,
+		RetryableOnSameAccount: !transportClass.Persistent,
+		ForceSameAccountRetry:  !transportClass.Persistent,
+		SameAccountRetryMax:    openAITransientUpstreamRetryLimit,
 	}
 }
 

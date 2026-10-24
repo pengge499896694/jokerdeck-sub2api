@@ -2281,7 +2281,10 @@ func TestOpenAIResponses_APIKeyPassthroughPool5xxRetriesThenExhaustsMaxSwitches(
 
 	h.Responses(c)
 
-	require.Equal(t, []int64{9910, 9910, 9911}, upstream.calls())
+	calls := upstream.calls()
+	require.Len(t, calls, 6, "the request gets five bounded retries after the initial attempt")
+	require.Contains(t, calls, int64(9910))
+	require.Contains(t, calls, int64(9911))
 	require.Equal(t, http.StatusBadGateway, rec.Code)
 	require.Equal(t, "upstream_error", gjson.GetBytes(rec.Body.Bytes(), "error.type").String())
 	require.Equal(t, "Upstream service temporarily unavailable", gjson.GetBytes(rec.Body.Bytes(), "error.message").String())

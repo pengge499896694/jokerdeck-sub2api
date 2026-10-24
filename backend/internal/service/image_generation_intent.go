@@ -79,17 +79,28 @@ func IsImageGenerationIntent(endpoint string, requestedModel string, body []byte
 	return imageIntent
 }
 
-// IsExplicitImageGenerationIntent 仅检测原生 image_generation 工具、图片模型和显式 tool_choice，
-// 不检测被动的 image_gen namespace 声明。用于 capability 路由决策——被动 namespace 不应
-// 强制要求原生 Responses 能力，否则 Chat Completions-only 账号会被误过滤（#4476）。
+// IsExplicitImageGenerationIntent 不检测被动的 image_gen namespace 声明。
+// 用于 capability 路由决策——被动 namespace 不应强制要求原生 Responses 能力，
+// 否则 Chat Completions-only 账号会被误过滤（#4476）。
 func IsExplicitImageGenerationIntent(endpoint string, requestedModel string, body []byte) bool {
+	return isExplicitImageGenerationIntent(endpoint, requestedModel, body, "")
+}
+
+// IsExplicitImageGenerationIntentForPlatform applies the explicit-signal rules
+// used by the Responses permission and capability gates, including Grok's
+// Responses Lite input format.
+func IsExplicitImageGenerationIntentForPlatform(endpoint, requestedModel string, body []byte, platform string) bool {
+	return isExplicitImageGenerationIntent(endpoint, requestedModel, body, platform)
+}
+
+func isExplicitImageGenerationIntent(endpoint string, requestedModel string, body []byte, platform string) bool {
 	if IsImageGenerationEndpoint(endpoint) || isOpenAIImageGenerationModel(requestedModel) {
 		return true
 	}
 	if len(body) == 0 || !gjson.ValidBytes(body) {
 		return false
 	}
-	var modelSeen, toolsSeen, toolChoiceSeen bool
+	var modelSeen, toolsSeen, toolChoiceSeen, inputSeen bool
 	imageIntent := false
 	parseRawJSONView(body).ForEach(func(key, value gjson.Result) bool {
 		switch key.Str {
@@ -103,13 +114,20 @@ func IsExplicitImageGenerationIntent(endpoint string, requestedModel string, bod
 				toolsSeen = true
 				imageIntent = openAIJSONToolsContainNativeImageGeneration(value)
 			}
+		case "input":
+			if !inputSeen {
+				inputSeen = true
+				if strings.EqualFold(strings.TrimSpace(platform), PlatformGrok) {
+					imageIntent = openAIJSONInputContainsNativeImageGeneration(value)
+				}
+			}
 		case "tool_choice":
 			if !toolChoiceSeen {
 				toolChoiceSeen = true
 				imageIntent = openAIJSONToolChoiceSelectsExplicitImageGeneration(value)
 			}
 		}
-		return !imageIntent && (!modelSeen || !toolsSeen || !toolChoiceSeen)
+		return !imageIntent && (!modelSeen || !toolsSeen || !toolChoiceSeen || !inputSeen)
 	})
 	return imageIntent
 }
@@ -126,42 +144,7 @@ func IsImageGenerationIntentForPlatform(endpoint string, requestedModel string, 
 	if !strings.EqualFold(strings.TrimSpace(platform), PlatformGrok) {
 		return IsImageGenerationIntent(endpoint, requestedModel, body)
 	}
-	return isExplicitGrokImageGenerationIntent(endpoint, requestedModel, body)
-}
-
-func isExplicitGrokImageGenerationIntent(endpoint string, requestedModel string, body []byte) bool {
-	if IsImageGenerationEndpoint(endpoint) || isOpenAIImageGenerationModel(requestedModel) {
-		return true
-	}
-	if len(body) == 0 || !gjson.ValidBytes(body) {
-		return false
-	}
-
-	var modelSeen, toolsSeen, toolChoiceSeen bool
-	imageIntent := false
-	parseRawJSONView(body).ForEach(func(key, value gjson.Result) bool {
-		switch key.Str {
-		case "model":
-			if !modelSeen {
-				modelSeen = true
-				imageIntent = isOpenAIImageGenerationModel(strings.TrimSpace(value.String()))
-			}
-		case "tools":
-			if !toolsSeen {
-				toolsSeen = true
-				// Grok removes namespace catalogs before forwarding. Native
-				// image_generation remains an explicit capability request.
-				imageIntent = openAIJSONToolsContainNativeImageGeneration(value)
-			}
-		case "tool_choice":
-			if !toolChoiceSeen {
-				toolChoiceSeen = true
-				imageIntent = openAIJSONToolChoiceSelectsExplicitImageGeneration(value)
-			}
-		}
-		return !imageIntent && (!modelSeen || !toolsSeen || !toolChoiceSeen)
-	})
-	return imageIntent
+	return isExplicitImageGenerationIntent(endpoint, requestedModel, body, platform)
 }
 
 // IsImageGenerationIntentMap is the map-backed variant used after service-side request mutation.
@@ -266,6 +249,21 @@ func openAIJSONInputContainsImageGenTool(input gjson.Result) bool {
 			return true
 		}
 		found = openAIJSONToolsContainImageGeneration(item.Get("tools"))
+		return !found
+	})
+	return found
+}
+
+func openAIJSONInputContainsNativeImageGeneration(input gjson.Result) bool {
+	if !input.IsArray() {
+		return false
+	}
+	found := false
+	input.ForEach(func(_, item gjson.Result) bool {
+		if openAIJSONString(item.Get("type")) != "additional_tools" {
+			return true
+		}
+		found = openAIJSONToolsContainNativeImageGeneration(item.Get("tools"))
 		return !found
 	})
 	return found

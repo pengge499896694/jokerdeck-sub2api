@@ -6,6 +6,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, readonly } from 'vue'
 import { authAPI, isTotp2FARequired, passkeyAPI, type LoginResponse } from '@/api'
+import * as conversationLogsAPI from '@/api/conversationLogs'
 import type {
   User,
   LoginRequest,
@@ -82,9 +83,12 @@ export const useAuthStore = defineStore('auth', () => {
   const refreshTokenValue = ref<string | null>(null)
   const tokenExpiresAt = ref<number | null>(null) // 过期时间戳（毫秒）
   const runMode = ref<'standard' | 'simple'>('standard')
+  const canViewAllConversationLogs = ref(false)
+  const conversationLogAccessLoaded = ref(false)
   const pendingAuthSession = ref<PendingAuthSessionSummary | null>(null)
   let refreshIntervalId: ReturnType<typeof setInterval> | null = null
   let tokenRefreshTimeoutId: ReturnType<typeof setTimeout> | null = null
+  let conversationLogAccessRequest: Promise<void> | null = null
 
   // ==================== Computed ====================
 
@@ -101,9 +105,46 @@ export const useAuthStore = defineStore('auth', () => {
   })
 
   const canAccessFinance = computed(() => isAdmin.value || isFinance.value)
+  const hasConversationLogAccess = computed(() => isAdmin.value || canViewAllConversationLogs.value)
 
   const isSimpleMode = computed(() => runMode.value === 'simple')
   const hasPendingAuthSession = computed(() => pendingAuthSession.value !== null)
+
+  async function refreshConversationLogAccess(force = false): Promise<void> {
+    if (!token.value || !user.value) {
+      canViewAllConversationLogs.value = false
+      conversationLogAccessLoaded.value = false
+      return
+    }
+    if (isAdmin.value) {
+      canViewAllConversationLogs.value = true
+      conversationLogAccessLoaded.value = true
+      return
+    }
+    if (!force && conversationLogAccessLoaded.value) return
+    if (conversationLogAccessRequest) return conversationLogAccessRequest
+
+    const accessToken = token.value
+    conversationLogAccessLoaded.value = false
+    const request = (async () => {
+      try {
+        const access = await conversationLogsAPI.getMyMenuPermissions()
+        if (token.value === accessToken) {
+          canViewAllConversationLogs.value = access.can_view_all_conversation_logs
+        }
+      } catch {
+        if (token.value === accessToken) canViewAllConversationLogs.value = false
+      } finally {
+        if (token.value === accessToken) conversationLogAccessLoaded.value = true
+      }
+    })()
+    conversationLogAccessRequest = request
+    try {
+      await request
+    } finally {
+      if (conversationLogAccessRequest === request) conversationLogAccessRequest = null
+    }
+  }
 
   // ==================== Actions ====================
 
@@ -125,6 +166,7 @@ export const useAuthStore = defineStore('auth', () => {
         user.value = JSON.parse(savedUser)
         refreshTokenValue.value = savedRefreshToken
         tokenExpiresAt.value = savedExpiresAt ? parseInt(savedExpiresAt, 10) : null
+        void refreshConversationLogAccess()
 
         // Immediately refresh user data from backend (async, don't block)
         refreshUser().catch((error) => {
@@ -318,6 +360,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
     const { run_mode: _run_mode, ...userData } = response.user
     user.value = userData
+    void refreshConversationLogAccess(true)
 
     // Persist to localStorage
     localStorage.setItem(AUTH_TOKEN_KEY, response.access_token)
@@ -369,6 +412,8 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
 
     token.value = newToken
+    canViewAllConversationLogs.value = false
+    conversationLogAccessLoaded.value = false
     localStorage.setItem(AUTH_TOKEN_KEY, newToken)
 
     // Read refresh token and expires_at from localStorage if set by OAuth callback
@@ -450,6 +495,7 @@ export const useAuthStore = defineStore('auth', () => {
       }
       const { run_mode: _run_mode, ...userData } = response.data
       user.value = userData
+      void refreshConversationLogAccess(true)
 
       // Update localStorage
       localStorage.setItem(AUTH_USER_KEY, JSON.stringify(userData))
@@ -478,6 +524,9 @@ export const useAuthStore = defineStore('auth', () => {
     refreshTokenValue.value = null
     tokenExpiresAt.value = null
     user.value = null
+    canViewAllConversationLogs.value = false
+    conversationLogAccessLoaded.value = false
+    conversationLogAccessRequest = null
     localStorage.removeItem(AUTH_TOKEN_KEY)
     localStorage.removeItem(AUTH_USER_KEY)
     localStorage.removeItem(REFRESH_TOKEN_KEY)
@@ -506,6 +555,9 @@ export const useAuthStore = defineStore('auth', () => {
     isAdmin,
     isFinance,
     canAccessFinance,
+    canViewAllConversationLogs,
+    conversationLogAccessLoaded,
+    hasConversationLogAccess,
     isSimpleMode,
     hasPendingAuthSession,
 
@@ -518,6 +570,7 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     checkAuth,
     refreshUser,
+    refreshConversationLogAccess,
     setPendingAuthSession,
     clearPendingAuthSession
   }

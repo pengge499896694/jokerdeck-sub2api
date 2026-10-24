@@ -21,6 +21,7 @@
 #   GREEN_PORT     绿端口               默认 18081
 #   NGINX_CONF     nginx upstream 配置   默认 /etc/nginx/conf.d/sub2api-upstream.conf
 #   STATE_FILE     记录当前颜色          默认 /opt/sub2api/.bluegreen-state
+#   LEGACY_APP_CONTAINERS  首次迁移时需清理的旧应用容器名，逗号分隔
 #   HAS_NGINX      1=用 nginx 切换, 0=用 docker 端口直切  默认 1
 #
 set -euo pipefail
@@ -42,6 +43,7 @@ HAS_NGINX="${HAS_NGINX:-1}"
 DATA_VOLUME="${DATA_VOLUME:-sub2api_data}"
 ENV_FILE="${ENV_FILE:-${SCRIPT_DIR}/.env}"
 HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-120}"
+LEGACY_APP_CONTAINERS="${LEGACY_APP_CONTAINERS:-}"
 
 log()  { printf '\033[1;34m[%s]\033[0m %s\n' "$(date +%H:%M:%S)" "$*"; }
 warn() { printf '\033[1;33mWARN\033[0m %s\n' "$*" >&2; }
@@ -58,8 +60,15 @@ port_of() {
   [[ "$1" == "blue" ]] && echo "$BLUE_PORT" || echo "$GREEN_PORT"
 }
 container_of() { echo "${APP_NAME}-$1"; }
+tag_file_of() { echo "${STATE_FILE}.$1.tag"; }
 
 save_color() { mkdir -p "$(dirname "$STATE_FILE")"; printf '%s' "$1" > "$STATE_FILE"; }
+save_tag() {
+  local color="$1" tag="$2"
+  mkdir -p "$(dirname "$(tag_file_of "$color")")"
+  printf '%s' "$tag" > "$(tag_file_of "$color")"
+}
+tag_of() { [[ -f "$(tag_file_of "$1")" ]] && cat "$(tag_file_of "$1")"; }
 
 # --- 构建 --------------------------------------------------------------------
 do_build() {
@@ -90,6 +99,9 @@ start_color() {
 
   docker run -d \
     --name "$name" \
+    --label com.jokerdeck.sub2api.managed=true \
+    --label "com.jokerdeck.sub2api.app=${APP_NAME}" \
+    --label com.jokerdeck.sub2api.role=app \
     --restart unless-stopped \
     --network "$NETWORK" \
     -p "127.0.0.1:${port}:8080" \
@@ -116,6 +128,7 @@ start_color() {
     sleep 3; waited=$((waited+3))
     (( waited % 15 == 0 )) && log "  ...已等待 ${waited}s"
   done
+  save_tag "$color" "$tag"
   log "${name} 健康检查通过 ✅"
 }
 
@@ -146,19 +159,56 @@ EOF
   save_color "$color"
 }
 
-# --- 收尾：停掉旧颜色 --------------------------------------------------------
-stop_old() {
-  local keep="$1"
-  local old
-  old="$([[ "$keep" == "blue" ]] && echo green || echo blue)"
-  local name
-  name="$(container_of "$old")"
-  if docker ps -a --format '{{.Names}}' | grep -qx "$name"; then
-    log "保留 ${container_of "$keep"} 运行，停止旧容器 ${name}"
-    # 给 in-flight 请求一点排空时间
-    docker stop -t 30 "$name" >/dev/null
-    log "旧容器已停止（未删除，回滚可用：docker start ${name}）"
+# --- 清理旧应用容器 ----------------------------------------------------------
+remove_app_container() {
+  local name="$1"
+  if docker ps -a --format '{{.Names}}' | grep -Fqx -- "$name"; then
+    log "停止旧应用容器 ${name}"
+    # 给 in-flight 请求一点排空时间，然后删除容器本身。
+    docker stop -t 30 "$name" >/dev/null || true
+    docker rm "$name" >/dev/null
+    log "旧应用容器已删除：${name}"
   fi
+}
+
+cleanup_old_app_containers() {
+  local keep="$1" old name legacy
+  old="$([[ "$keep" == "blue" ]] && echo green || echo blue)"
+  remove_app_container "$(container_of "$old")"
+
+  # 只清理本脚本创建并打过标签的应用容器，不触碰数据库、Redis、Nginx。
+  while IFS= read -r name; do
+    [[ -z "$name" || "$name" == "$(container_of "$keep")" ]] && continue
+    remove_app_container "$name"
+  done < <(docker ps -a \
+    --filter 'label=com.jokerdeck.sub2api.managed=true' \
+    --filter "label=com.jokerdeck.sub2api.app=${APP_NAME}" \
+    --filter 'label=com.jokerdeck.sub2api.role=app' \
+    --format '{{.Names}}')
+
+  # 首次迁移可显式传入旧应用容器名。必须是 APP_NAME 本身或使用 APP_NAME- 前缀。
+  local -a legacy_names=()
+  IFS=',' read -r -a legacy_names <<< "$LEGACY_APP_CONTAINERS"
+  for legacy in "${legacy_names[@]}"; do
+    legacy="${legacy#"${legacy%%[![:space:]]*}"}"
+    legacy="${legacy%"${legacy##*[![:space:]]}"}"
+    [[ -z "$legacy" ]] && continue
+    [[ "$legacy" == "$APP_NAME" || "$legacy" == "${APP_NAME}-"* ]] || die "拒绝清理非应用容器：${legacy}"
+    [[ "$legacy" == "$(container_of "$keep")" ]] && continue
+    remove_app_container "$legacy"
+  done
+}
+
+validate_legacy_app_containers() {
+  local legacy
+  local -a legacy_names=()
+  IFS=',' read -r -a legacy_names <<< "$LEGACY_APP_CONTAINERS"
+  for legacy in "${legacy_names[@]}"; do
+    legacy="${legacy#"${legacy%%[![:space:]]*}"}"
+    legacy="${legacy%"${legacy##*[![:space:]]}"}"
+    [[ -z "$legacy" ]] && continue
+    [[ "$legacy" == "$APP_NAME" || "$legacy" == "${APP_NAME}-"* ]] || die "拒绝清理非应用容器：${legacy}"
+  done
 }
 
 # --- 命令 --------------------------------------------------------------------
@@ -168,15 +218,16 @@ cmd_deploy() {
   cur="$(current_color)"
   next="$(other_color)"
 
+  validate_legacy_app_containers
   docker image inspect "${IMAGE}:${tag}" >/dev/null 2>&1 || die "镜像 ${IMAGE}:${tag} 不存在，请先执行 build"
 
   log "当前颜色=${cur}  目标颜色=${next}"
   start_color "$next" "$tag"       # 1. 起新版本
   switch_traffic "$next"           # 2. 健康后切流量
-  stop_old "$next"                 # 3. 停旧版本
+  cleanup_old_app_containers "$next" # 3. 停止并删除旧应用容器
 
   log "部署完成 🎉 当前活动颜色=${next}（端口 $(port_of "$next")）"
-  log "回滚命令： $0 rollback"
+  log "旧镜像仍保留；需要回滚时可执行： $0 rollback"
 }
 
 cmd_rollback() {
@@ -186,12 +237,20 @@ cmd_rollback() {
   local name
   name="$(container_of "$prev")"
 
-  docker ps -a --format '{{.Names}}' | grep -qx "$name" || die "旧容器 ${name} 不存在，无法自动回滚（请检查备份）"
-
+  validate_legacy_app_containers
   log "回滚：${cur} → ${prev}"
-  docker start "$name" >/dev/null
-  start_color_wait_ready "$name" || die "回滚目标未就绪"
+  if docker ps -a --format '{{.Names}}' | grep -Fqx -- "$name"; then
+    docker start "$name" >/dev/null
+    start_color_wait_ready "$name" || die "回滚目标未就绪"
+  else
+    local tag
+    tag="$(tag_of "$prev")"
+    [[ -n "$tag" ]] || die "找不到 ${prev} 的历史镜像标签，无法自动回滚"
+    docker image inspect "${IMAGE}:${tag}" >/dev/null 2>&1 || die "历史镜像 ${IMAGE}:${tag} 不存在，无法自动回滚"
+    start_color "$prev" "$tag"
+  fi
   switch_traffic "$prev"
+  cleanup_old_app_containers "$prev"
   log "已回滚到 ${prev}"
 }
 
@@ -206,6 +265,9 @@ start_color_wait_ready() {
 
 cmd_status() {
   log "当前颜色： $(current_color)"
+  for color in blue green; do
+    [[ -f "$(tag_file_of "$color")" ]] && printf '%s 镜像标签：%s\n' "$color" "$(tag_of "$color")"
+  done
   echo
   docker ps -a --filter "name=${APP_NAME}-" \
     --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
@@ -226,6 +288,10 @@ case "${1:-}" in
   deploy [tag]    零停机发布到备用颜色
   rollback        回滚到上一个颜色
   status          查看状态
+
+首次切换时如需删除旧版应用容器，可在 deploy/.env 设置：
+  LEGACY_APP_CONTAINERS=sub2api-next,sub2api-v0216-nodes-20261015
+仅填写旧应用容器名（必须是 ${APP_NAME} 或以 ${APP_NAME}- 开头）；不会清理数据库、Redis、代理容器或镜像。
 
 环境变量见脚本头部注释。
 EOF

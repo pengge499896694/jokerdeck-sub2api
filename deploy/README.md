@@ -128,6 +128,29 @@ docker compose -f docker-compose.local.yml logs -f sub2api
 
 **Recommendation:** Use `docker-compose.local.yml` (deployed by `docker-deploy.sh`) for easier data management and migration.
 
+### Blue-Green Updates
+
+`bluegreen-deploy.sh` supports zero-downtime updates when a host Nginx reverse
+proxy uses the `sub2api_backend` upstream and the application uses the configured
+Docker network and data volume. It is a separate deployment mode; do not run it
+against a Compose or containerized-proxy installation without adapting the
+network and proxy configuration first.
+
+```bash
+./bluegreen-deploy.sh build <tag>
+./bluegreen-deploy.sh deploy <tag>
+./bluegreen-deploy.sh status
+./bluegreen-deploy.sh rollback
+```
+
+After the new container passes `/health` and Nginx switches traffic, the old
+application container is stopped with a 30-second drain period and removed.
+Images are retained so `rollback` can recreate the previous container. On the
+first migration, set `LEGACY_APP_CONTAINERS` in `deploy/.env` to a comma-separated
+list of old application container names (each must be `APP_NAME` or start with `APP_NAME-`). The
+cleanup never prunes Docker globally and does not remove PostgreSQL, Redis, or
+proxy containers.
+
 ### How Auto-Setup Works
 
 When using Docker Compose with `AUTO_SETUP=true`:

@@ -98,6 +98,14 @@ func (s *FrontendServer) Middleware() gin.HandlerFunc {
 		if cleanPath == "" {
 			cleanPath = "index.html"
 		}
+		if isCanvasAppRoute(cleanPath) && !s.fileExists(cleanPath) {
+			serveCanvasAppIndex(c, s.distFS)
+			return
+		}
+		if cleanPath == "infinite-canvas/index.html" {
+			serveCanvasAppIndex(c, s.distFS)
+			return
+		}
 
 		// For index.html or SPA routes, serve with injected settings
 		if cleanPath == "index.html" || !s.fileExists(cleanPath) {
@@ -115,6 +123,22 @@ func (s *FrontendServer) Middleware() gin.HandlerFunc {
 		s.fileServer.ServeHTTP(c.Writer, c.Request)
 		c.Abort()
 	}
+}
+
+func isCanvasAppRoute(path string) bool {
+	return path == "infinite-canvas" || strings.HasPrefix(path, "infinite-canvas/")
+}
+
+func serveCanvasAppIndex(c *gin.Context, distFS fs.FS) {
+	content, err := fs.ReadFile(distFS, "infinite-canvas/index.html")
+	if err != nil {
+		c.Status(http.StatusNotFound)
+		c.Abort()
+		return
+	}
+	c.Header("Cache-Control", "no-cache")
+	c.Data(http.StatusOK, "text/html; charset=utf-8", content)
+	c.Abort()
 }
 
 func (s *FrontendServer) fileExists(path string) bool {
@@ -320,6 +344,10 @@ func ServeEmbeddedFrontend() gin.HandlerFunc {
 		if cleanPath == "" {
 			cleanPath = "index.html"
 		}
+		if isCanvasAppRoute(cleanPath) && (cleanPath == "infinite-canvas/index.html" || !fileExistsInFS(distFS, cleanPath)) {
+			serveCanvasAppIndex(c, distFS)
+			return
+		}
 
 		if file, err := distFS.Open(cleanPath); err == nil {
 			_ = file.Close()
@@ -335,6 +363,11 @@ func ServeEmbeddedFrontend() gin.HandlerFunc {
 
 		serveIndexHTML(c, distFS)
 	}
+}
+
+func fileExistsInFS(fsys fs.FS, path string) bool {
+	_, err := fs.Stat(fsys, path)
+	return err == nil
 }
 
 // tryServeOverrideFile is a standalone version of tryServeOverride for legacy usage.

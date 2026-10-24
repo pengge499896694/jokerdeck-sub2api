@@ -765,6 +765,16 @@ func TestHasEmbeddedFrontend(t *testing.T) {
 
 // Tests for legacy ServeEmbeddedFrontend function
 func TestServeEmbeddedFrontend(t *testing.T) {
+	t.Run("serves_canvas_app_index_for_nested_routes", func(t *testing.T) {
+		router := gin.New()
+		router.Use(ServeEmbeddedFrontend())
+		for _, path := range []string{"/infinite-canvas/", "/infinite-canvas/canvas/example", "/infinite-canvas/index.html"} {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+			assert.Equal(t, http.StatusOK, w.Code)
+			assert.Contains(t, w.Body.String(), "<div id=\"root\"></div>")
+		}
+	})
 	t.Run("serves_static_files", func(t *testing.T) {
 		middleware := ServeEmbeddedFrontend()
 
@@ -852,6 +862,20 @@ func TestServeEmbeddedFrontend(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestFrontendServerCanvasAppRoutes(t *testing.T) {
+	server, err := NewFrontendServer(&mockSettingsProvider{})
+	require.NoError(t, err)
+	router := gin.New()
+	router.Use(server.Middleware())
+	for _, path := range []string{"/infinite-canvas/", "/infinite-canvas/canvas/example", "/infinite-canvas/index.html"} {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		assert.Equal(t, http.StatusOK, w.Code, path)
+		assert.Contains(t, w.Body.String(), "<div id=\"root\"></div>", path)
+		assert.NotContains(t, w.Body.String(), "__APP_CONFIG__", path)
+	}
 }
 
 // Tests for HTMLCache

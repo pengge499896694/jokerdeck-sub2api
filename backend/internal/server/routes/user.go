@@ -82,10 +82,30 @@ func RegisterUserRoutes(
 			keys.DELETE("/:id", h.APIKey.Delete)
 		}
 
+		// 对话记录仅对管理员和被单独授权的账号开放。
+		conversationLogs := authenticated.Group("/conversation-logs")
+		{
+			conversationLogs.GET("/access", h.ConversationLog.MyMenuPermissions)
+			conversationLogs.GET("", h.ConversationLog.List)
+			conversationLogs.GET("/:id", h.ConversationLog.Get)
+		}
+
+		canvas := authenticated.Group("/canvas")
+		{
+			canvas.GET("", h.Canvas.List)
+			canvas.POST("", h.Canvas.Create)
+			canvas.GET("/:id", h.Canvas.Get)
+			canvas.PUT("/:id", h.Canvas.Save)
+			canvas.DELETE("/:id", h.Canvas.Delete)
+			canvas.POST("/:id/assets", h.Canvas.Upload)
+			canvas.GET("/:id/assets/:asset_id", h.Canvas.Asset)
+		}
+
 		// 用户可用分组（非管理员接口）
 		groups := authenticated.Group("/groups")
 		{
 			groups.GET("/available", h.APIKey.GetAvailableGroups)
+			groups.GET("/health", h.ChannelMonitorV2.GroupHealth)
 			groups.GET("/rates", h.APIKey.GetUserGroupRates)
 		}
 

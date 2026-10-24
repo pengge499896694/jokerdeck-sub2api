@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -376,9 +377,12 @@ func ChannelMonitorV2BootstrapProgress(now, coveredFrom time.Time, hasData bool)
 }
 
 type ChannelMonitorV2Service struct {
-	repo     ChannelMonitorV2Repository
-	settings channelMonitorRuntimeReader
-	now      func() time.Time
+	groupHealthMu   sync.Mutex
+	groupHealthAt   time.Time
+	groupHealthRows []GroupHealth
+	repo            ChannelMonitorV2Repository
+	settings        channelMonitorRuntimeReader
+	now             func() time.Time
 }
 
 func NewChannelMonitorV2Service(repo ChannelMonitorV2Repository) *ChannelMonitorV2Service {

@@ -114,6 +114,18 @@ func TestEffectiveSameAccountRetryLimitHonorsErrorCapAndDisabledAccount(t *testi
 	require.Equal(t, 0, effectiveSameAccountRetryLimit(&service.UpstreamFailoverError{SameAccountRetryMax: 1}, account))
 }
 
+func TestEffectiveSameAccountRetryLimitForceOverridesPoolMode(t *testing.T) {
+	account := &service.Account{Type: service.AccountTypeAPIKey, Credentials: map[string]any{"pool_mode": false}}
+	err := &service.UpstreamFailoverError{
+		ForceSameAccountRetry:  true,
+		SameAccountRetryMax:    5,
+		RetryableOnSameAccount: true,
+	}
+	require.Equal(t, 5, effectiveSameAccountRetryLimit(err, account))
+	require.True(t, sameAccountRetryAllowed(err, 4, effectiveSameAccountRetryLimit(err, account)))
+	require.False(t, sameAccountRetryAllowed(err, 5, effectiveSameAccountRetryLimit(err, account)))
+}
+
 // ---------------------------------------------------------------------------
 // Helper
 // ---------------------------------------------------------------------------

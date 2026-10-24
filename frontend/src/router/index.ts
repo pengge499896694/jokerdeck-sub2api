@@ -230,6 +230,22 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/canvas',
+    name: 'InfiniteCanvas',
+    component: () => import('@/views/user/InfiniteCanvasView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: '无限画布',
+    }
+  },
+  {
+    path: '/client-guide',
+    name: 'JokerdeckClientGuide',
+    component: () => import('@/views/user/JokerdeckClientGuideView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, title: 'Jokerdeck Client 使用教程' }
+  },
+  {
     path: '/usage',
     name: 'Usage',
     component: () => import('@/views/user/UsageView.vue'),
@@ -239,6 +255,17 @@ const routes: RouteRecordRaw[] = [
       title: 'Usage Records',
       titleKey: 'usage.title',
       descriptionKey: 'usage.description'
+    }
+  },
+  {
+    path: '/conversation-logs',
+    name: 'ConversationLogs',
+    component: () => import('@/views/user/ConversationLogsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      requiresConversationLogsAccess: true,
+      title: '对话记录'
     }
   },
   {
@@ -873,6 +900,7 @@ router.beforeEach(async (to, _from, next) => {
   const requiresAuth = to.meta.requiresAuth !== false // Default to true
   const requiresAdmin = to.meta.requiresAdmin === true
   const requiresFinance = to.meta.requiresFinance === true
+  const requiresConversationLogsAccess = to.meta.requiresConversationLogsAccess === true
 
   if (to.path === '/setup') {
     try {
@@ -965,7 +993,17 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
 
-  if (requiresAdmin && authStore.isAdmin) {
+  if (requiresConversationLogsAccess) {
+    if (!authStore.isAdmin && !authStore.conversationLogAccessLoaded) {
+      await authStore.refreshConversationLogAccess()
+    }
+    if (!authStore.hasConversationLogAccess) {
+      next('/dashboard')
+      return
+    }
+  }
+
+  if ((requiresAdmin || requiresConversationLogsAccess) && authStore.isAdmin) {
     const adminComplianceStore = useAdminComplianceStore()
     if (!adminComplianceStore.initialized) {
       try {

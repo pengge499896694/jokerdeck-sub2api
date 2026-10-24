@@ -1,0 +1,3 @@
+#!/bin/sh
+set -eu
+printf 'nginx %s\n' "$*" >> "${FAKE_DOCKER_EVENTS:?FAKE_DOCKER_EVENTS is required}"

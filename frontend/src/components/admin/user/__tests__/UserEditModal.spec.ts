@@ -3,8 +3,10 @@ import { flushPromises, mount } from '@vue/test-utils'
 
 import UserEditModal from '../UserEditModal.vue'
 
-const { update, updateUserAttributeValues, showSuccess, showError } = vi.hoisted(() => ({
+const { update, getMenuPermissions, updateMenuPermissions, updateUserAttributeValues, showSuccess, showError } = vi.hoisted(() => ({
   update: vi.fn(),
+  getMenuPermissions: vi.fn(),
+  updateMenuPermissions: vi.fn(),
   updateUserAttributeValues: vi.fn(),
   showSuccess: vi.fn(),
   showError: vi.fn()
@@ -12,7 +14,7 @@ const { update, updateUserAttributeValues, showSuccess, showError } = vi.hoisted
 
 vi.mock('@/api/admin', () => ({
   adminAPI: {
-    users: { update },
+    users: { update, getMenuPermissions, updateMenuPermissions },
     userAttributes: { updateUserAttributeValues }
   }
 }))
@@ -56,10 +58,14 @@ const mountModal = (concurrency: number) => mount(UserEditModal, {
 describe('UserEditModal concurrency', () => {
   beforeEach(() => {
     update.mockReset()
+    getMenuPermissions.mockReset()
+    updateMenuPermissions.mockReset()
     updateUserAttributeValues.mockReset()
     showSuccess.mockReset()
     showError.mockReset()
     update.mockResolvedValue({})
+    getMenuPermissions.mockResolvedValue({ menu_permissions: [] })
+    updateMenuPermissions.mockResolvedValue({})
   })
 
   // Regression coverage for issue #5977: the gateway treats concurrency <= 0 as

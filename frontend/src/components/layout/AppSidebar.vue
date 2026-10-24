@@ -127,7 +127,7 @@
       </template>
 
       <!-- Regular User View -->
-      <template v-else-if="!appStore.backendModeEnabled || authStore.isFinance">
+      <template v-else-if="!appStore.backendModeEnabled || authStore.isFinance || authStore.hasConversationLogAccess">
         <div class="sidebar-section">
           <router-link
             v-if="authStore.isFinance"
@@ -307,6 +307,12 @@ const KeyIcon = {
         })
       ]
     )
+}
+
+const BookIcon = {
+  render: () => h('svg', { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' }, [
+    h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', d: 'M12 7.5c-2.25-1.5-5.25-1.5-8.25-.75v12c3-.75 6-.75 8.25.75m0-12c2.25-1.5 5.25-1.5 8.25-.75v12c-3-.75-6-.75-8.25.75m0-12v12' })
+  ])
 }
 
 const BatchImageIcon = {
@@ -754,6 +760,9 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   }
   items.push(
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
+    ...(authStore.hasConversationLogAccess ? [{ path: '/conversation-logs', label: '对话记录', icon: BookIcon }] : []),
+    { path: '/client-guide', label: '客户端教程', icon: BookIcon },
+    { path: '/canvas', label: '无限画布', icon: BatchImageIcon },
     { path: '/batch-image', label: t('nav.batchImage'), icon: BatchImageIcon, hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
     { path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon, hideInSimpleMode: true, featureFlag: flagAvailableChannels },

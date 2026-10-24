@@ -57,6 +57,20 @@ func (*openAIAuthPolicy403Counter) ResetOpenAI403Count(context.Context, int64) e
 	return nil
 }
 
+func TestOpenAITransientGatewayStatusesGetBoundedSameAccountRetryBudget(t *testing.T) {
+	for _, status := range []int{http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			err := newOpenAIUpstreamFailoverError(status, nil, nil, "temporary upstream failure", false)
+			require.True(t, err.RetryableOnSameAccount)
+			require.True(t, err.ForceSameAccountRetry)
+			require.Equal(t, 5, err.SameAccountRetryMax)
+		})
+	}
+
+	err := newOpenAIUpstreamFailoverError(http.StatusUnauthorized, nil, nil, "invalid credentials", false)
+	require.False(t, err.ForceSameAccountRetry)
+}
+
 func TestOpenAIUpstreamAccessStateClassification(t *testing.T) {
 	tests := []struct {
 		name string

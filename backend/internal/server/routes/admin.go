@@ -94,6 +94,7 @@ func RegisterAdminRoutes(
 
 		// 使用记录管理
 		registerUsageRoutes(admin, h)
+		registerConversationLogRoutes(admin, h)
 
 		// 用户属性管理
 		registerUserAttributeRoutes(admin, h)
@@ -319,6 +320,8 @@ func registerUserManagementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		users.PUT("/:id", h.Admin.User.Update)
 		users.DELETE("/:id", h.Admin.User.Delete)
 		users.POST("/:id/balance", h.Admin.User.UpdateBalance)
+		users.GET("/:id/menu-permissions", h.Admin.ConversationLog.AdminGetUserMenuPermissions)
+		users.PUT("/:id/menu-permissions", h.Admin.ConversationLog.AdminSetUserMenuPermissions)
 		users.GET("/:id/api-keys", h.Admin.User.GetUserAPIKeys)
 		users.GET("/:id/usage", h.Admin.User.GetUserUsage)
 		users.GET("/:id/balance-history", h.Admin.User.GetBalanceHistory)
@@ -717,6 +720,14 @@ func registerSubscriptionRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 
 	// 用户下的订阅列表
 	admin.GET("/users/:id/subscriptions", h.Admin.Subscription.ListByUser)
+}
+
+func registerConversationLogRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	logs := admin.Group("/conversation-logs")
+	{
+		logs.GET("/storage", h.Admin.ConversationLog.StorageStats)
+		logs.POST("/batch-delete", h.Admin.ConversationLog.BatchDelete)
+	}
 }
 
 func registerUsageRoutes(admin *gin.RouterGroup, h *handler.Handlers) {

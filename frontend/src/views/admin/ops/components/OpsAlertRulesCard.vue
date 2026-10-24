@@ -145,6 +145,24 @@ const metricDefinitions = computed(() => {
       unit: '%'
     },
     {
+      type: 'ttft_p95_ms',
+      group: 'system',
+      label: '首字 P95（毫秒）',
+      description: '统计窗口内模型首字返回时间的 P95。',
+      recommendedOperator: '>',
+      recommendedThreshold: 10000,
+      unit: 'ms'
+    },
+    {
+      type: 'duration_p95_ms',
+      group: 'system',
+      label: '总耗时 P95（毫秒）',
+      description: '统计窗口内请求总耗时的 P95。',
+      recommendedOperator: '>',
+      recommendedThreshold: 60000,
+      unit: 'ms'
+    },
+    {
       type: 'cpu_usage_percent',
       group: 'system',
       label: t('admin.ops.alertRules.metrics.cpu'),

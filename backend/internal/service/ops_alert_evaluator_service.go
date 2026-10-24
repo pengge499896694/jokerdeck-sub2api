@@ -598,6 +598,16 @@ func (s *OpsAlertEvaluatorService) computeRuleMetric(
 	}
 
 	switch strings.TrimSpace(rule.MetricType) {
+	case "ttft_p95_ms":
+		if overview.TTFT.P95 == nil || overview.RequestCountSLA <= 0 {
+			return 0, false
+		}
+		return float64(*overview.TTFT.P95), true
+	case "duration_p95_ms":
+		if overview.Duration.P95 == nil || overview.RequestCountSLA <= 0 {
+			return 0, false
+		}
+		return float64(*overview.Duration.P95), true
 	case "success_rate":
 		if overview.RequestCountSLA <= 0 {
 			return 0, false
