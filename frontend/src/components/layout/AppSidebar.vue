@@ -763,6 +763,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     ...(authStore.hasConversationLogAccess ? [{ path: '/conversation-logs', label: '对话记录', icon: BookIcon }] : []),
     { path: '/client-guide', label: '客户端教程', icon: BookIcon },
     { path: '/canvas', label: '无限画布', icon: BatchImageIcon },
+    { path: '/canvas-guide', label: '无限画布教程', icon: BookIcon },
     { path: '/batch-image', label: t('nav.batchImage'), icon: BatchImageIcon, hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
     { path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon, hideInSimpleMode: true, featureFlag: flagAvailableChannels },

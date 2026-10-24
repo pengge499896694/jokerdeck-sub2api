@@ -240,6 +240,12 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/canvas-guide',
+    name: 'InfiniteCanvasGuide',
+    component: () => import('@/views/user/InfiniteCanvasGuideView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, title: '无限画布使用教程' }
+  },
+  {
     path: '/client-guide',
     name: 'JokerdeckClientGuide',
     component: () => import('@/views/user/JokerdeckClientGuideView.vue'),
