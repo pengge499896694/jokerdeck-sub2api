@@ -57,6 +57,18 @@ func TestOpenAIImagesResponsesDriverAndImageModels(t *testing.T) {
 	}
 }
 
+func TestGPTImageGenerationModelRecognizesCanvasSuperResolutionAliases(t *testing.T) {
+	for _, model := range []string{
+		"[超分] gpt-image-2",
+		"[超分] gpt-image-2.5-flare",
+		"[超分] [超分] gpt-image-2.5-sunburst",
+	} {
+		require.True(t, IsGPTImageGenerationModel(model), model)
+		require.NoError(t, validateOpenAIImagesModel(model), model)
+	}
+	require.False(t, IsGPTImageGenerationModel("[超分] gemini-2.5-flash-image"))
+}
+
 func TestOpenAIImagesRejectedDriverDoesNotCoolImageModel(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	t.Setenv("SUB2API_IMAGES_MAIN_MODEL", "gpt-5.4-mini")

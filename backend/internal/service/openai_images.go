@@ -481,8 +481,18 @@ func isOpenAIImageGenerationModel(model string) bool {
 
 // IsGPTImageGenerationModel identifies the GPT native image-generation model family.
 func IsGPTImageGenerationModel(model string) bool {
-	model = strings.ToLower(strings.TrimSpace(model))
+	model = strings.ToLower(openAIImageModelID(model))
 	return strings.HasPrefix(model, "gpt-image-")
+}
+
+// openAIImageModelID removes the canvas super-resolution marker while keeping
+// the original public model name available for allowlist checks and mapping.
+func openAIImageModelID(model string) string {
+	model = strings.TrimSpace(model)
+	for strings.HasPrefix(model, "[超分]") {
+		model = strings.TrimSpace(strings.TrimPrefix(model, "[超分]"))
+	}
+	return model
 }
 
 func isGrokImageGenerationModel(model string) bool {

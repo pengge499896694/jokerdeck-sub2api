@@ -53,6 +53,22 @@ func TestCodexDirectImagesRouting(t *testing.T) {
 }
 
 func TestCodexDirectImagesMappingBeforeRouting(t *testing.T) {
+	t.Run("super-resolution alias maps to configured actual model", func(t *testing.T) {
+		body := []byte(`{"model":"[超分] gpt-image-2","prompt":"draw"}`)
+		c, _ := newOpenAIImagesTestContext(t, body)
+		upstream := &httpUpstreamRecorder{resp: openAIImagesJSONResponse()}
+		svc := newOpenAIImagesTestService(upstream)
+		parsed, err := svc.ParseOpenAIImagesRequest(c, body)
+		require.NoError(t, err)
+		account := newOpenAIImagesAPIKeyAccount()
+		account.Credentials["model_mapping"] = map[string]any{"[超分] gpt-image-2": "gpt-image-2-4k"}
+		result, err := svc.ForwardImages(context.Background(), c, account, body, parsed, "")
+		require.NoError(t, err)
+		require.Equal(t, "[超分] gpt-image-2", result.Model)
+		require.Equal(t, "gpt-image-2-4k", result.UpstreamModel)
+		require.Equal(t, "gpt-image-2-4k", gjson.GetBytes(upstream.lastBody, "model").String())
+	})
+
 	for _, accountType := range []string{AccountTypeOAuth, AccountTypeSetupToken} {
 		t.Run(accountType, func(t *testing.T) {
 			body := []byte(`{"model":"gpt-image-1","prompt":"draw"}`)

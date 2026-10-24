@@ -1,1 +1,0 @@
-import{i as t}from"./index-B3XVYSHF.js";function m(e){return t.t("imageReferences.label",{index:e+1})}function c(e,r){const n=e.trim();if(!r.length)return n;const a=r.map((o,i)=>m(i));return t.t("imageReferences.promptPrefix",{labels:a.join(t.t("imageReferences.separator")),prompt:n})}export{c as b,m as i};

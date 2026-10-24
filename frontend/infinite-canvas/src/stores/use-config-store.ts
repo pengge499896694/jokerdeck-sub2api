@@ -172,12 +172,17 @@ const IMAGE_KEYWORDS = [
   "midjourney",
 ];
 
-/** Remove display-only catalogue tags such as "[超分] " before routing. */
+/** Strip display-only tags, retaining [超分] as a requestable model alias. */
 export function normalizeModelId(value: string) {
-  return value
-    .trim()
-    .replace(/^(?:\[[^\]]+\]\s*)+/, "")
-    .trim();
+  let model = value.trim();
+  let superResolution = false;
+  for (;;) {
+    const tag = model.match(/^\[([^\]]+)\]\s*/);
+    if (!tag) break;
+    superResolution ||= tag[1] === "超分";
+    model = model.slice(tag[0].length).trimStart();
+  }
+  return `${superResolution ? "[超分] " : ""}${model}`.trim();
 }
 
 /** Best-effort default capability for a freshly fetched model name; user can override in the channel editor. */

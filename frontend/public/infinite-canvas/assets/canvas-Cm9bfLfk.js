@@ -1,0 +1,1 @@
+import{c as i}from"./index-CKvfOT2L.js";const t={name:"x",size:24,node:[["path",{d:"M18 6 6 18",key:"1bl5f8"}],["path",{d:"m6 6 12 12",key:"d8bk6v"}]]};t.node;const e=i(t);var r=(o=>(o.Image="image",o.Text="text",o.Config="config",o.Video="video",o.Audio="audio",o.Group="group",o))(r||{});export{r as C,e as X};

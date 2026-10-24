@@ -1,0 +1,1 @@
+import{c as e}from"./index-CKvfOT2L.js";const a={name:"check",size:24,node:[["path",{d:"M20 6 9 17l-5-5",key:"1gmf2c"}]]};a.node;const n=e(a);const c={name:"plus",size:24,node:[["path",{d:"M5 12h14",key:"1ays0h"}],["path",{d:"M12 5v14",key:"s699le"}]]};c.node;const s=e(c);export{n as C,s as P};

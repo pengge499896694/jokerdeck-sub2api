@@ -39,6 +39,7 @@ func newGroupModelAllowlistTestRouter(apiKey *service.APIKey, pathPrefix string)
 	register(http.MethodGet, pathPrefix+"/models/:model")
 	register(http.MethodPost, pathPrefix+"/models/*modelAction")
 	register(http.MethodGet, pathPrefix+"/realtime")
+	register(http.MethodPost, pathPrefix+"/images/generations")
 	register(http.MethodPost, pathPrefix+"/images/edits")
 	register(http.MethodPost, pathPrefix+"/live")
 	return router, &calls
@@ -158,6 +159,29 @@ func TestGroupModelAllowlistJSONBodyAllowed(t *testing.T) {
 	}
 	if len(*calls) != 1 {
 		t.Fatalf("expected handler to run once, got %v", *calls)
+	}
+}
+
+func TestGroupModelAllowlistSuperResolutionAliasesMatchExactly(t *testing.T) {
+	for _, alias := range []string{
+		"[超分] gpt-image-2",
+		"[超分] gpt-image-2.5-flare",
+		"[超分] gpt-image-2.5-sunburst",
+	} {
+		t.Run(alias, func(t *testing.T) {
+			router, _ := newGroupModelAllowlistTestRouter(allowlistAPIKey(true, alias), "/v1")
+
+			allowed := doJSON(t, router, http.MethodPost, "/v1/images/generations", `{"model":"`+alias+`"}`)
+			if allowed.Code != http.StatusOK {
+				t.Fatalf("expected configured alias to pass, got %d: %s", allowed.Code, allowed.Body.String())
+			}
+
+			bareModel := strings.TrimPrefix(alias, "[超分] ")
+			denied := doJSON(t, router, http.MethodPost, "/v1/images/generations", `{"model":"`+bareModel+`"}`)
+			if denied.Code != http.StatusNotFound {
+				t.Fatalf("expected bare model %q to remain denied, got %d: %s", bareModel, denied.Code, denied.Body.String())
+			}
+		})
 	}
 }
 
