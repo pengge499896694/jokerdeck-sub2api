@@ -190,7 +190,7 @@ func fetchClientNodeSource(ctx context.Context, client *http.Client, subscriptio
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("subscription returned HTTP %d", resp.StatusCode)
 	}
@@ -406,21 +406,21 @@ func mergeClientNodeSources(sources []clientNodeSourceDocument, disabledNames []
 	}
 	primaryNames := make([]string, 0)
 	backupNames := make([]string, 0)
-	sourceGroups := make([]map[string]interface{}, 0, len(sources))
+	sourceGroups := make([]map[string]any, 0, len(sources))
 	seen := map[string]bool{"CLIENT-PRIMARY": true, "CLIENT-BACKUP": true, "CLIENT-AUTO": true}
-	var merged []interface{}
+	var merged []any
 	for _, source := range sources {
 		if source.Doc == nil {
 			continue
 		}
 		sourceNames := make([]string, 0, len(source.Doc.Proxies))
-		var raw map[string]interface{}
+		var raw map[string]any
 		if yaml.Unmarshal(source.Data, &raw) != nil {
 			continue
 		}
-		if values, ok := raw["proxies"].([]interface{}); ok {
+		if values, ok := raw["proxies"].([]any); ok {
 			for _, value := range values {
-				item, ok := value.(map[string]interface{})
+				item, ok := value.(map[string]any)
 				if !ok {
 					continue
 				}
@@ -446,7 +446,7 @@ func mergeClientNodeSources(sources []clientNodeSourceDocument, disabledNames []
 			}
 		}
 		if len(sourceNames) > 0 {
-			sourceGroups = append(sourceGroups, map[string]interface{}{
+			sourceGroups = append(sourceGroups, map[string]any{
 				"id": source.ID, "filename": source.Name, "role": map[bool]string{true: "primary", false: "backup"}[source.Primary], "nodes": sourceNames,
 			})
 		}
@@ -454,22 +454,22 @@ func mergeClientNodeSources(sources []clientNodeSourceDocument, disabledNames []
 	if len(merged) == 0 {
 		return nil, errors.New("all client node subscriptions have no enabled nodes")
 	}
-	result := map[string]interface{}{"proxies": merged, "x-jokerdeck-sources": sourceGroups}
+	result := map[string]any{"proxies": merged, "x-jokerdeck-sources": sourceGroups}
 	const testURL = "https://www.gstatic.com/generate_204"
-	groups := make([]interface{}, 0, 3)
+	groups := make([]any, 0, 3)
 	order := make([]string, 0, 2)
 	if len(primaryNames) > 0 {
-		groups = append(groups, map[string]interface{}{"name": "CLIENT-PRIMARY", "type": "url-test", "proxies": primaryNames, "url": testURL, "interval": 300})
+		groups = append(groups, map[string]any{"name": "CLIENT-PRIMARY", "type": "url-test", "proxies": primaryNames, "url": testURL, "interval": 300})
 		order = append(order, "CLIENT-PRIMARY")
 	}
 	if len(backupNames) > 0 {
-		groups = append(groups, map[string]interface{}{"name": "CLIENT-BACKUP", "type": "url-test", "proxies": backupNames, "url": testURL, "interval": 300})
+		groups = append(groups, map[string]any{"name": "CLIENT-BACKUP", "type": "url-test", "proxies": backupNames, "url": testURL, "interval": 300})
 		order = append(order, "CLIENT-BACKUP")
 	}
 	if len(order) == 2 {
-		groups = append(groups, map[string]interface{}{"name": "CLIENT-AUTO", "type": "fallback", "proxies": order, "url": testURL, "interval": 300})
+		groups = append(groups, map[string]any{"name": "CLIENT-AUTO", "type": "fallback", "proxies": order, "url": testURL, "interval": 300})
 	} else {
-		groups = append(groups, map[string]interface{}{"name": "CLIENT-AUTO", "type": "select", "proxies": order})
+		groups = append(groups, map[string]any{"name": "CLIENT-AUTO", "type": "select", "proxies": order})
 	}
 	result["proxy-groups"] = groups
 	result["rules"] = []string{"MATCH,CLIENT-AUTO"}

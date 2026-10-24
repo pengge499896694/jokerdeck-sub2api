@@ -115,7 +115,11 @@ func clientDownloadPage(c *gin.Context) {
 		c.String(http.StatusBadGateway, "客户端发布信息暂时不可用，请稍后重试")
 		return
 	}
-	platforms := manifest["platforms"].(map[string]any)
+	platforms, ok := manifest["platforms"].(map[string]any)
+	if !ok {
+		c.String(http.StatusBadGateway, "客户端发布信息暂时不可用，请稍后重试")
+		return
+	}
 	base := clientPublicBaseURL(c)
 	links := make([]string, 0, len(platforms))
 	for _, platform := range []string{"windows-x86_64", "darwin-x86_64", "darwin-aarch64"} {
@@ -255,7 +259,7 @@ func fetchClientRelease(url string, maxSize int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("release source returned HTTP %d", resp.StatusCode)
 	}

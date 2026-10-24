@@ -112,8 +112,8 @@ func TestGetUserGroupVisibilityEmptyAndErrors(t *testing.T) {
 func TestUserGroupRateGrantsExclusiveGroupAccess(t *testing.T) {
 	rates := &visibilityRateRepo{rates: map[int64]float64{99: 0.25}}
 	svc := &APIKeyService{
-		userRepo: &visibilityUserRepo{user: &User{ID: 1}},
-		userSubRepo: &visibilitySubRepo{},
+		userRepo:          &visibilityUserRepo{user: &User{ID: 1}},
+		userSubRepo:       &visibilitySubRepo{},
 		userGroupRateRepo: rates,
 		groupRepo: &visibilityGroupRepo{groups: []Group{
 			{ID: 99, Name: "专属倍率", IsExclusive: true},

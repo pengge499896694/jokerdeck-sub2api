@@ -486,8 +486,15 @@ func (s *APIKeyService) canUserBindGroup(ctx context.Context, user *User, group 
 		_, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, user.ID, group.ID)
 		return err == nil // 有有效订阅则允许
 	}
-	// 标准类型分组：使用原有逻辑
-	return user.CanBindGroup(group.ID, group.IsExclusive)
+	// 标准类型分组：用户倍率覆盖也授予绑定该专属分组的权限。
+	if user.CanBindGroup(group.ID, group.IsExclusive) {
+		return true
+	}
+	if s.userGroupRateRepo == nil {
+		return false
+	}
+	rate, err := s.userGroupRateRepo.GetByUserAndGroup(ctx, user.ID, group.ID)
+	return err == nil && rate != nil
 }
 
 // Create 创建API Key
@@ -1072,11 +1079,15 @@ func (s *APIKeyService) GetAvailableGroups(ctx context.Context, userID int64) ([
 	for _, sub := range activeSubscriptions {
 		subscribedGroupIDs[sub.GroupID] = true
 	}
+	userGroupRates, err := s.GetUserGroupRates(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
 
 	// 过滤出用户有权限的分组
 	availableGroups := make([]Group, 0)
 	for _, group := range allGroups {
-		if s.canUserBindGroupInternal(user, &group, subscribedGroupIDs) {
+		if s.canUserBindGroupInternal(user, &group, subscribedGroupIDs, userGroupRates) {
 			availableGroups = append(availableGroups, group)
 		}
 	}
@@ -1085,13 +1096,17 @@ func (s *APIKeyService) GetAvailableGroups(ctx context.Context, userID int64) ([
 }
 
 // canUserBindGroupInternal 内部方法，检查用户是否可以绑定分组（使用预加载的订阅数据）
-func (s *APIKeyService) canUserBindGroupInternal(user *User, group *Group, subscribedGroupIDs map[int64]bool) bool {
+func (s *APIKeyService) canUserBindGroupInternal(user *User, group *Group, subscribedGroupIDs map[int64]bool, userGroupRates map[int64]float64) bool {
 	// 订阅类型分组：需要有效订阅
 	if group.IsSubscriptionType() {
 		return subscribedGroupIDs[group.ID]
 	}
 	// 标准类型分组：使用原有逻辑
-	return user.CanBindGroup(group.ID, group.IsExclusive)
+	if user.CanBindGroup(group.ID, group.IsExclusive) {
+		return true
+	}
+	_, hasRateOverride := userGroupRates[group.ID]
+	return hasRateOverride
 }
 
 func (s *APIKeyService) SearchAPIKeys(ctx context.Context, userID int64, keyword string, limit int) ([]APIKey, error) {
@@ -1122,6 +1137,13 @@ func (s *APIKeyService) GetUserGroupVisibility(ctx context.Context, userID int64
 	}
 	for _, sub := range subscriptions {
 		allowed[sub.GroupID] = struct{}{}
+	}
+	userGroupRates, err := s.GetUserGroupRates(ctx, userID)
+	if err != nil {
+		return nil, false, err
+	}
+	for groupID := range userGroupRates {
+		allowed[groupID] = struct{}{}
 	}
 	return allowed, user.RestrictPublicGroups, nil
 }

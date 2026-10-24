@@ -286,7 +286,7 @@ func (s *ConversationLogService) List(ctx context.Context, filters ConversationL
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]ConversationLog, 0)
 	for rows.Next() {
 		var item ConversationLog
@@ -417,7 +417,7 @@ func (s *ConversationLogService) ListUserMenuPermissions(ctx context.Context, us
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	permissions := make([]string, 0, 1)
 	for rows.Next() {
 		var key string
@@ -451,7 +451,7 @@ func (s *ConversationLogService) SetUserMenuPermissions(ctx context.Context, use
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.ExecContext(ctx, `DELETE FROM user_menu_permissions WHERE user_id = $1`, userID); err != nil {
 		return err
 	}

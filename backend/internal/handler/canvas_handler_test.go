@@ -42,7 +42,7 @@ func TestCanvasDocumentBounds(t *testing.T) {
 func TestCanvasGetScopesByOwner(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { _ = db.Close() })
 	id := uuid.NewString()
 	mock.ExpectQuery("SELECT title, document, revision FROM canvas_boards WHERE id=\\$1 AND user_id=\\$2").WithArgs(uuid.MustParse(id), int64(42)).WillReturnRows(sqlmock.NewRows([]string{"title", "document", "revision"}).AddRow("Board", []byte(`{"nodes":[],"edges":[],"viewport":{"x":0,"y":0,"zoom":1}}`), 2))
 	w := httptest.NewRecorder()
@@ -55,7 +55,7 @@ func TestCanvasGetScopesByOwner(t *testing.T) {
 func TestCanvasSaveConflict(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { _ = db.Close() })
 	id := uuid.NewString()
 	mock.ExpectQuery("UPDATE canvas_boards SET").WithArgs("Board", sqlmock.AnyArg(), uuid.MustParse(id), int64(42), int64(3)).WillReturnRows(sqlmock.NewRows([]string{"revision"}))
 	mock.ExpectQuery("SELECT EXISTS").WithArgs(uuid.MustParse(id), int64(42)).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
@@ -69,7 +69,7 @@ func TestCanvasSaveConflict(t *testing.T) {
 func TestCanvasUploadEnforcesQuota(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { _ = db.Close() })
 	img := image.NewRGBA(image.Rect(0, 0, 2, 2))
 	img.Set(0, 0, color.RGBA{R: 100, A: 255})
 	var pngBytes bytes.Buffer

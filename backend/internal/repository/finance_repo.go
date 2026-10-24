@@ -31,7 +31,7 @@ func (r *financeRepository) ListUsers(ctx context.Context, search string) ([]ser
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := make([]service.FinanceUser, 0)
 	for rows.Next() {
 		var item service.FinanceUser
@@ -70,7 +70,7 @@ func (r *financeRepository) ListBalances(ctx context.Context, f service.FinanceF
 	if err != nil {
 		return nil, nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]service.FinanceUser, 0, f.PageSize)
 	for rows.Next() {
 		var item service.FinanceUser
@@ -90,7 +90,7 @@ func (r *financeRepository) ListGroups(ctx context.Context) ([]service.FinanceGr
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	groups := make([]service.FinanceGroup, 0)
 	for rows.Next() {
 		var g service.FinanceGroup
@@ -121,7 +121,7 @@ func (r *financeRepository) ListGroupMembers(ctx context.Context, groupID int64)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := make([]service.FinanceUser, 0)
 	for rows.Next() {
 		var item service.FinanceUser
@@ -167,7 +167,7 @@ func (r *financeRepository) ReplaceGroupMembers(ctx context.Context, groupID int
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var exists bool
 	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM finance_groups WHERE id=$1)`, groupID).Scan(&exists); err != nil {
 		return err
@@ -253,7 +253,7 @@ func (r *financeRepository) queryRecharges(ctx context.Context, where string, ar
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]service.FinanceRecharge, 0)
 	for rows.Next() {
 		var item service.FinanceRecharge
@@ -283,7 +283,7 @@ func (r *financeRepository) ListUsage(ctx context.Context, f service.FinanceFilt
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]service.FinanceUsage, 0)
 	for rows.Next() {
 		var item service.FinanceUsage

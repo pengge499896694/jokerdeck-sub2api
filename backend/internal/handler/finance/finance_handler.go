@@ -260,51 +260,45 @@ func (h *Handler) Export(c *gin.Context) {
 		return
 	}
 
-	var rows []any
+	var usageRows []service.FinanceUsage
+	var rechargeRows []service.FinanceRecharge
 	for filters.Page <= 1000 {
-		var pageTotal int64
-		var pageAmount float64
 		if kind == "usage" {
-			items, page, amount, listErr := h.service.ListUsage(c.Request.Context(), filters)
+			items, page, _, listErr := h.service.ListUsage(c.Request.Context(), filters)
 			if listErr != nil {
 				response.ErrorFrom(c, listErr)
 				return
 			}
-			pageTotal, pageAmount = page.Total, amount
-			if pageTotal > maxFinanceExportRows {
+			if page.Total > maxFinanceExportRows {
 				response.BadRequest(c, "Export exceeds 100000 rows; narrow the filters")
 				return
 			}
-			for _, item := range items {
-				rows = append(rows, item)
-			}
-			if len(items) == 0 || len(rows) >= maxFinanceExportRows || int64(filters.Page*filters.PageSize) >= pageTotal {
+			usageRows = append(usageRows, items...)
+			if len(items) == 0 || len(usageRows) >= maxFinanceExportRows || int64(filters.Page*filters.PageSize) >= page.Total {
 				break
 			}
 		} else {
-			items, page, amount, listErr := h.service.ListRecharges(c.Request.Context(), filters)
+			items, page, _, listErr := h.service.ListRecharges(c.Request.Context(), filters)
 			if listErr != nil {
 				response.ErrorFrom(c, listErr)
 				return
 			}
-			pageTotal, pageAmount = page.Total, amount
-			if pageTotal > maxFinanceExportRows {
+			if page.Total > maxFinanceExportRows {
 				response.BadRequest(c, "Export exceeds 100000 rows; narrow the filters")
 				return
 			}
-			for _, item := range items {
-				rows = append(rows, item)
-			}
-			if len(items) == 0 || len(rows) >= maxFinanceExportRows || int64(filters.Page*filters.PageSize) >= pageTotal {
+			rechargeRows = append(rechargeRows, items...)
+			if len(items) == 0 || len(rechargeRows) >= maxFinanceExportRows || int64(filters.Page*filters.PageSize) >= page.Total {
 				break
 			}
 		}
-		_ = pageAmount
-		_ = pageTotal
 		filters.Page++
 	}
-	if len(rows) > maxFinanceExportRows {
-		rows = rows[:maxFinanceExportRows]
+	if len(usageRows) > maxFinanceExportRows {
+		usageRows = usageRows[:maxFinanceExportRows]
+	}
+	if len(rechargeRows) > maxFinanceExportRows {
+		rechargeRows = rechargeRows[:maxFinanceExportRows]
 	}
 
 	c.Header("Content-Type", "text/csv; charset=utf-8")
@@ -314,8 +308,7 @@ func (h *Handler) Export(c *gin.Context) {
 	writer := csv.NewWriter(c.Writer)
 	if kind == "usage" {
 		_ = writer.Write([]string{"记录ID", "用户ID", "邮箱", "用户名", "财务分组", "模型", "请求ID", "输入Token", "输出Token", "总Token", "实际费用USD", "时间"})
-		for _, raw := range rows {
-			item := raw.(service.FinanceUsage)
+		for _, item := range usageRows {
 			_ = writer.Write([]string{
 				strconv.FormatInt(item.ID, 10), strconv.FormatInt(item.UserID, 10), safeCSVText(item.Email), safeCSVText(item.Username),
 				safeCSVText(item.GroupName), safeCSVText(item.Model), safeCSVText(item.RequestID), strconv.Itoa(item.InputTokens), strconv.Itoa(item.OutputTokens),
@@ -324,8 +317,7 @@ func (h *Handler) Export(c *gin.Context) {
 		}
 	} else {
 		_ = writer.Write([]string{"记录ID", "用户ID", "邮箱", "用户名", "财务分组", "类型", "金额USD", "状态", "备注", "使用时间", "创建时间"})
-		for _, raw := range rows {
-			item := raw.(service.FinanceRecharge)
+		for _, item := range rechargeRows {
 			usedAt := ""
 			if item.UsedAt != nil {
 				usedAt = item.UsedAt.Format(time.RFC3339)

@@ -5,6 +5,10 @@ vite.config.d.ts
 # 忽略依赖
 node_modules/
 
+# 独立 React 应用及其构建产物不使用 Vue ESLint 配置
+infinite-canvas/
+public/infinite-canvas/
+
 # 忽略构建输出
 dist/
 ../backend/internal/web/dist/

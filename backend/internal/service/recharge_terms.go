@@ -22,7 +22,7 @@ func RechargeTermsAccepted(ctx context.Context, db *dbent.Client, userID int64) 
 	if err != nil {
 		return false, fmt.Errorf("read recharge terms acceptance: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	if !rows.Next() {
 		return false, fmt.Errorf("read recharge terms acceptance: no row returned")
 	}
@@ -58,7 +58,7 @@ func AcceptRechargeTerms(ctx context.Context, db *dbent.Client, userID int64, no
 	if err != nil {
 		return fmt.Errorf("save recharge terms acceptance: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	if !rows.Next() {
 		if err := rows.Err(); err != nil {
 			return fmt.Errorf("save recharge terms acceptance: %w", err)

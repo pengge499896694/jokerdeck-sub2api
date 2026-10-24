@@ -96,7 +96,7 @@ func (s *XianyuRechargeService) Create(ctx context.Context, userID int64, input 
 		}
 		return nil, fmt.Errorf("create xianyu recharge order: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	if !rows.Next() {
 		return nil, fmt.Errorf("create xianyu recharge order: no row returned")
 	}
@@ -127,7 +127,7 @@ func (s *XianyuRechargeService) ListForUser(ctx context.Context, userID int64) (
 	if err != nil {
 		return nil, fmt.Errorf("list user xianyu recharge orders: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	return scanXianyuOrders(rows, false)
 }
 
@@ -161,7 +161,9 @@ func (s *XianyuRechargeService) ListAdmin(ctx context.Context, page, pageSize in
 	if countRows.Next() {
 		err = countRows.Scan(&total)
 	}
-	countRows.Close()
+	if closeErr := countRows.Close(); closeErr != nil && err == nil {
+		err = closeErr
+	}
 	if err != nil {
 		return nil, 0, fmt.Errorf("scan xianyu recharge order count: %w", err)
 	}
@@ -180,7 +182,7 @@ func (s *XianyuRechargeService) ListAdmin(ctx context.Context, page, pageSize in
 	if err != nil {
 		return nil, 0, fmt.Errorf("list admin xianyu recharge orders: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	orders, err := scanXianyuOrders(rows, true)
 	return orders, total, err
 }
@@ -190,7 +192,7 @@ func (s *XianyuRechargeService) PendingCount(ctx context.Context) (int64, error)
 	if err != nil {
 		return 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var count int64
 	if !rows.Next() {
 		return 0, sql.ErrNoRows
@@ -234,12 +236,11 @@ func (s *XianyuRechargeService) Credit(ctx context.Context, orderID, adminUserID
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	if !rows.Next() {
-		rows.Close()
 		return nil, infraerrors.NotFound("XIANYU_ORDER_NOT_FOUND", "充值订单不存在")
 	}
 	order, err := scanXianyuOrder(rows, true)
-	rows.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -268,12 +269,11 @@ func (s *XianyuRechargeService) Credit(ctx context.Context, orderID, adminUserID
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = updateRows.Close() }()
 	if !updateRows.Next() {
-		updateRows.Close()
 		return nil, infraerrors.Conflict("XIANYU_ORDER_ALREADY_REVIEWED", "该订单已经处理，不能重复入账")
 	}
 	updated, err := scanXianyuOrder(updateRows, false)
-	updateRows.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +303,7 @@ func (s *XianyuRechargeService) Reject(ctx context.Context, orderID, adminUserID
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	if !rows.Next() {
 		return nil, infraerrors.Conflict("XIANYU_ORDER_ALREADY_REVIEWED", "订单不存在或已经处理")
 	}

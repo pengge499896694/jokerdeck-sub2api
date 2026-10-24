@@ -14,7 +14,7 @@ func TestFeedbackSetStatus(t *testing.T) {
 		t.Run(status, func(t *testing.T) {
 			db, mock, err := sqlmock.New()
 			require.NoError(t, err)
-			defer db.Close()
+			t.Cleanup(func() { _ = db.Close() })
 			mock.ExpectExec(`UPDATE feedback_tickets\s+SET status=\$2::text,\s+closed_at=CASE WHEN \$2::text`).
 				WithArgs(int64(42), status).
 				WillReturnResult(sqlmock.NewResult(0, 1))
@@ -28,7 +28,7 @@ func TestFeedbackSetStatus(t *testing.T) {
 func TestFeedbackSetStatusMissingTicket(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { _ = db.Close() })
 	mock.ExpectExec(`UPDATE feedback_tickets`).WithArgs(int64(42), "closed").
 		WillReturnResult(sqlmock.NewResult(0, 0))
 

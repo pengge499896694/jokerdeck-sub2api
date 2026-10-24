@@ -92,4 +92,3 @@ func (h *XianyuRechargeHandler) Reject(c *gin.Context) {
 	}
 	response.Success(c, order)
 }
-

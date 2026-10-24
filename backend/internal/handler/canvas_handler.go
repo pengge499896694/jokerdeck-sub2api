@@ -76,12 +76,12 @@ func (h *CanvasHandler) List(c *gin.Context) {
 		canvasFailure(c, err)
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]gin.H, 0)
 	for rows.Next() {
 		var id, title string
 		var revision int64
-		var updated interface{}
+		var updated any
 		if err := rows.Scan(&id, &title, &revision, &updated); err != nil {
 			canvasFailure(c, err)
 			return
@@ -230,7 +230,7 @@ func (h *CanvasHandler) Upload(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid image"})
 		return
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	data, err := io.ReadAll(io.LimitReader(file, canvasAssetLimit+1))
 	if err != nil || len(data) == 0 || len(data) > canvasAssetLimit {
 		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "Image limit is 8 MB"})
@@ -250,7 +250,7 @@ func (h *CanvasHandler) Upload(c *gin.Context) {
 		canvasFailure(c, err)
 		return
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	// Serialize a user's uploads so concurrent requests cannot bypass the quota.
 	var locked int64
 	if err = tx.QueryRowContext(c, `SELECT id FROM users WHERE id=$1 FOR UPDATE`, user).Scan(&locked); err != nil {

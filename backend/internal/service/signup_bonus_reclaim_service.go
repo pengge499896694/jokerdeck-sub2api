@@ -31,7 +31,9 @@ func NewSignupBonusReclaimService(reclaimer signupBonusReclaimer, interval time.
 }
 
 func (s *SignupBonusReclaimService) Start() {
-	if s == nil || s.interval <= 0 { return }
+	if s == nil || s.interval <= 0 {
+		return
+	}
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -40,8 +42,10 @@ func (s *SignupBonusReclaimService) Start() {
 		defer ticker.Stop()
 		for {
 			select {
-			case <-ticker.C: s.runOnce()
-			case <-s.stopCh: return
+			case <-ticker.C:
+				s.runOnce()
+			case <-s.stopCh:
+				return
 			}
 		}
 	}()
