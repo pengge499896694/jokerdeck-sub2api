@@ -72,7 +72,7 @@ tag_of() { [[ -f "$(tag_file_of "$1")" ]] && cat "$(tag_file_of "$1")"; }
 
 # --- 构建 --------------------------------------------------------------------
 do_build() {
-  local tag="${1:-0.2.17}"
+  local tag="${1:-0.2.18}"
   log "构建镜像 ${IMAGE}:${tag}"
   docker build \
     -t "${IMAGE}:${tag}" \
@@ -213,7 +213,7 @@ validate_legacy_app_containers() {
 
 # --- 命令 --------------------------------------------------------------------
 cmd_deploy() {
-  local tag="${1:-0.2.17}"
+  local tag="${1:-0.2.18}"
   local cur next
   cur="$(current_color)"
   next="$(other_color)"
@@ -276,15 +276,15 @@ cmd_status() {
 }
 
 case "${1:-}" in
-  build)    shift; do_build "${1:-0.2.17}" ;;
-  deploy)   shift; cmd_deploy "${1:-0.2.17}" ;;
+  build)    shift; do_build "${1:-0.2.18}" ;;
+  deploy)   shift; cmd_deploy "${1:-0.2.18}" ;;
   rollback) cmd_rollback ;;
   status)   cmd_status ;;
   *)
     cat <<EOF
 用法: $0 <命令> [tag]
 
-  build [tag]     构建镜像（默认 tag 0.2.17）
+  build [tag]     构建镜像（默认 tag 0.2.18）
   deploy [tag]    零停机发布到备用颜色
   rollback        回滚到上一个颜色
   status          查看状态

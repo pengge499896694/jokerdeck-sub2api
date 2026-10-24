@@ -23,10 +23,18 @@ export interface CanvasDocument {
 export interface CanvasSummary { id: string; title: string; revision: number; updated_at?: string }
 export interface CanvasBoard extends CanvasSummary { document: CanvasDocument }
 
-// Model catalogues may prefix an ID with a display-only tag such as
-// "[超分] gpt-image-2". Gateway endpoints require the bare model ID.
+// Keep [超分] as a requestable alias; account model mappings use the complete
+// public ID to select the actual upstream resolution model.
 export function normalizeGatewayModelId(value: string): string {
-  return value.trim().replace(/^(?:\[[^\]]+\]\s*)+/, '').trim()
+  let model = value.trim()
+  let superResolution = false
+  for (;;) {
+    const tag = model.match(/^\[([^\]]+)\]\s*/)
+    if (!tag) break
+    superResolution ||= tag[1] === '超分'
+    model = model.slice(tag[0].length).trimStart()
+  }
+  return `${superResolution ? '[超分] ' : ''}${model}`.trim()
 }
 
 export const canvasAPI = {

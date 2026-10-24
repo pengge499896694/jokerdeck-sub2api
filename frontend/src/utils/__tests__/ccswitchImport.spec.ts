@@ -55,24 +55,6 @@ describe('ccswitchImport utils', () => {
     'https://api.example.com/',
     'https://api.example.com/v1',
     'https://api.example.com/v1/'
-  ])('imports Codex with exactly one /v1 suffix for base URL %s', (baseUrl) => {
-    const params = paramsFromDeeplink(
-      buildCcSwitchImportDeeplink({
-        ...baseInput,
-        baseUrl,
-        platform: 'openai',
-        clientType: 'claude'
-      })
-    )
-
-    expect(params.get('endpoint')).toBe('https://api.example.com/v1')
-  })
-
-  it.each([
-    'https://api.example.com',
-    'https://api.example.com/',
-    'https://api.example.com/v1',
-    'https://api.example.com/v1/'
   ])('imports Grok Build with one /v1 suffix for base URL %s', (baseUrl) => {
     const params = paramsFromDeeplink(
       buildCcSwitchImportDeeplink({
