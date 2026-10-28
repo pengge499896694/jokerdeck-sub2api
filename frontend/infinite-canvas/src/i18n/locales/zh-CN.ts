@@ -36,7 +36,7 @@ export default {
         text: { title: "文本设置", reasoning: "推理强度", count: "生成次数" },
         model: { select: "选择模型", assign: "请先在渠道里为{{capability}}指定模型", noMatch: "暂无匹配的{{capability}}模型", addFirst: "请先到配置里添加渠道和模型", capabilities: { image: "生图", video: "视频", text: "文本", audio: "音频" } },
     },
-    generation: { pending: ["正在创建图片", "马上就好了", "再等等", "正在整理细节"] },
+    generation: { canvas: {"generating": "模型处理中", "saving": "图片已生成，正在保存", "elapsed": "已用时 {{duration}}", "completed": "已完成 {{completed}} / {{total}} 张", "failed": "{{count}} 张失败，可单独重试", "waitHint": "完成后自动显示。模型未提供百分比或剩余时间，请保持页面打开。"}, pending: ["正在创建图片", "马上就好了", "再等等", "正在整理细节"] },
     imageReferences: { label: "图片{{index}}", separator: "、", promptPrefix: "参考图片编号：{{labels}}。请按这些编号理解提示词中的图片引用。\n\n{{prompt}}" },
     modelPlugin: {
         pollTimeout: "插件轮询超时，请检查调用脚本或稍后重试", executionFailed: "模型调用脚本执行失败：{{message}}", noImages: "模型调用脚本没有返回图片",

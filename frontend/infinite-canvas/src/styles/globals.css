@@ -607,3 +607,14 @@
     border-radius: 0.6rem;
     font-size: 0.75rem;
 }
+
+.canvas-generation-wait {
+    animation: canvas-generation-wait 1.8s ease-in-out infinite;
+}
+@keyframes canvas-generation-wait {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(300%); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .canvas-generation-wait { animation: none; left: 33%; }
+}

@@ -36,7 +36,7 @@ export default {
         text: { title: "Text settings", reasoning: "Reasoning effort", count: "Generation count" },
         model: { select: "Select model", assign: "Assign a model for {{capability}} in the provider settings", noMatch: "No matching {{capability}} models", addFirst: "Add a provider and models in Settings first", capabilities: { image: "image generation", video: "video", text: "text", audio: "audio" } },
     },
-    generation: { pending: ["Creating image", "Almost there", "Just a little longer", "Refining details"] },
+    generation: { canvas: {"generating": "Waiting for the model", "saving": "Image generated · Saving", "elapsed": "Elapsed {{duration}}", "completed": "{{completed}} / {{total}} images ready", "failed": "{{count}} failed · Retry individually", "waitHint": "Images appear when ready. The model provides no percentage or ETA. Keep this page open."}, pending: ["Creating image", "Almost there", "Just a little longer", "Refining details"] },
     imageReferences: { label: "Image {{index}}", separator: ", ", promptPrefix: "Reference image labels: {{labels}}. Use these labels to interpret image references in the prompt.\n\n{{prompt}}" },
     modelPlugin: {
         pollTimeout: "Plugin polling timed out. Check the request script or try again later.", executionFailed: "Model request script failed: {{message}}", noImages: "The model request script did not return any images",

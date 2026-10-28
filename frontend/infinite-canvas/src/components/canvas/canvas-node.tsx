@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExtern
 import type { ReactNode } from "react";
 import { ChevronRight, Copy, Download, Group, Image as ImageIcon, Music2, Puzzle, RefreshCw, Star, Trash2, Video } from "lucide-react";
 
+import { CanvasImageProgress } from "./canvas-image-progress";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
 import { pickImageSource } from "@/lib/image-thumbnail";
@@ -458,7 +459,7 @@ export const CanvasNode = React.memo(function CanvasNode({
 
 function NodeContent(props: NodeContentRendererProps) {
     if (props.node.type === CanvasNodeType.Config && props.renderNodeContent) return props.renderNodeContent(props.node);
-    if (props.isBatchRoot && props.node.type === CanvasNodeType.Image) return <ImageNodeContent {...props} />;
+    if (props.node.type === CanvasNodeType.Image && (props.isBatchRoot || props.node.metadata?.status === "loading")) return <ImageNodeContent {...props} />;
     if (props.node.type === CanvasNodeType.Text && props.node.metadata?.texts?.length && (props.node.metadata.status !== "error" || props.node.metadata.texts.some((text) => text.content))) return <TextContent {...props} />;
     if (props.node.metadata?.status === "loading") return <LoadingContent theme={props.theme} />;
     if (props.node.metadata?.status === "error") return <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} />;
@@ -674,6 +675,7 @@ function TextSlotStatus({ text }: { text: CanvasNodeText }) {
 }
 
 function ImageNodeContent(props: NodeContentRendererProps) {
+    if (props.node.metadata?.status === "loading" && !props.isBatchRoot) return <CanvasImageProgress progress={props.node.metadata.generationProgress} />;
     if (!props.node.metadata?.content && !props.isBatchRoot) return <EmptyImageContent {...props} />;
 
     return (
@@ -768,6 +770,11 @@ function ImageContent({
     const primaryImageId = node.metadata?.primaryImageId || images[0]?.id;
     const primaryImage = images.find((image) => image.id === primaryImageId);
     const primaryContent = primaryImage?.content || node.metadata?.content;
+    const pendingImages = images.filter((image) => image.status === "loading");
+    const completedImages = images.filter((image) => image.status === "success").length;
+    const failedImages = images.filter((image) => image.status === "error").length;
+    const activeProgress = (pendingImages.find((image) => image.generationProgress?.stage === "generating") || pendingImages[0])?.generationProgress;
+
     const primaryPreviewUrl = previewUrlFor(primaryImage?.storageKey || node.metadata?.storageKey);
     const primarySource = primaryContent
         ? pickImageSource({
@@ -798,9 +805,14 @@ function ImageContent({
                         className={`pointer-events-none block h-full w-full select-none ${node.metadata?.freeResize ? "object-fill" : "object-contain"}`}
                     />
                 ) : (
-                    <ImageSlotStatus image={primaryImage} />
+                    <ImageSlotStatus image={primaryImage} completed={completedImages} failed={failedImages} total={batchCount} />
                 )}
             </div>
+            {isBatchRoot && pendingImages.length > 0 && (primaryContent || primaryImage?.status === "error") ? (
+                <div className="pointer-events-none absolute inset-x-3 bottom-3 z-40">
+                    <CanvasImageProgress compact progress={activeProgress} completed={completedImages} failed={failedImages} total={batchCount} />
+                </div>
+            ) : null}
             {primaryImage?.status === "error" ? <BatchImageFailureActions placement="left" onRetry={() => onRetryBatchImage?.(primaryImage.id)} onDelete={() => onDeleteBatchImage?.(primaryImage.id)} /> : null}
             {primaryImage?.content ? (
                 <button type="button" className="pointer-events-none absolute left-2.5 top-2.5 z-30 flex h-8 items-center gap-1 rounded-lg border px-2 text-[10px] font-medium opacity-0 shadow-[0_6px_18px_rgba(15,23,42,.16)] backdrop-blur-md transition hover:scale-[1.02] group-hover/node:pointer-events-auto group-hover/node:opacity-100" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.activeText }} title={t("common.download")} onClick={(event) => (event.stopPropagation(), onDownloadBatchImage?.(primaryImage.id))}>
@@ -917,14 +929,14 @@ function BatchImageFailureActions({ placement, onRetry, onDelete }: { placement:
     );
 }
 
-function ImageSlotStatus({ image }: { image?: CanvasNodeImage }) {
+function ImageSlotStatus({ image, completed, failed: failedCount, total }: { image?: CanvasNodeImage; completed?: number; failed?: number; total?: number }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const { t } = useTranslation();
     const failed = image?.status === "error";
+    if (!failed) return <CanvasImageProgress progress={image?.generationProgress} completed={completed} failed={failedCount} total={total} />;
     return (
         <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center" style={{ background: theme.node.fill, color: failed ? theme.node.text : theme.node.activeStroke }}>
-            {failed ? <span className="text-xs leading-5">{image.errorDetails || t("canvas.node.failed")}</span> : <div className="size-10 animate-spin rounded-full border-2" style={{ borderColor: theme.node.stroke, borderTopColor: theme.node.activeStroke }} />}
-            {!failed ? <span className="text-[10px] tracking-[0.2em]">{t("canvas.node.generating")}</span> : null}
+            <span className="text-xs leading-5">{image.errorDetails || t("canvas.node.failed")}</span>
         </div>
     );
 }

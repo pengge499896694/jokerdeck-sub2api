@@ -25,7 +25,13 @@ export type CanvasNodeStatus = "idle" | "success" | "loading" | "error";
 export type CanvasGenerationMode = "text" | "image" | "video" | "audio";
 export type CanvasImageGenerationType = "generation" | "edit";
 
+export type CanvasImageProgress = {
+    startedAt: number;
+    stage: "generating" | "saving";
+};
+
 export type CanvasNodeImage = {
+    generationProgress?: CanvasImageProgress;
     id: string;
     status: CanvasNodeStatus;
     errorDetails?: string;
@@ -45,6 +51,7 @@ export type CanvasNodeText = {
 };
 
 export type CanvasNodeMetadata = {
+    generationProgress?: CanvasImageProgress;
     content?: string;
     composerContent?: string;
     prompt?: string;
