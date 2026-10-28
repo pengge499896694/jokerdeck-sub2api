@@ -118,7 +118,7 @@ function loadImageMeta(url: string, options?: ImageReadOptions, timeoutMs = IMAG
         options?.signal?.addEventListener("abort", abort, { once: true });
         image.onload = () => finish(image.naturalWidth && image.naturalHeight ? { width: image.naturalWidth, height: image.naturalHeight } : null);
         image.onerror = () => finish(null);
-        image.src = url;
+        image.src = withCanvasNetworkProxy(url);
     });
 }
 

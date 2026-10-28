@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/url"
 	"strings"
+	"time"
 	"unicode"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -20,7 +22,7 @@ const canvasNetworkSettingsKey = "canvas_network"
 type CanvasNetworkSettings struct {
 	Enabled        bool     `json:"enabled"`
 	VisibleToUsers bool     `json:"visible_to_users"`
-	ProxyID        *int64   `json:"proxy_id,omitempty"`
+	ProxyID        *int64   `json:"proxy_id"`
 	AllowedHosts   []string `json:"allowed_hosts"`
 }
 
@@ -44,7 +46,7 @@ func normalizeCanvasNetworkHosts(values []string) ([]string, error) {
 	for _, raw := range values {
 		host := strings.ToLower(strings.TrimSpace(raw))
 		host = strings.TrimSuffix(host, ".")
-		if host == "" || len(host) > 253 || strings.ContainsAny(host, "/\\:@?#") || strings.IndexFunc(host, unicode.IsSpace) >= 0 {
+		if host == "" || !strings.Contains(host, ".") || net.ParseIP(host) != nil || len(host) > 253 || strings.ContainsAny(host, "/*\\:@?#") || strings.IndexFunc(host, unicode.IsSpace) >= 0 {
 			return nil, infraerrors.BadRequest("CANVAS_NETWORK_HOST_INVALID", "画布线路允许域名格式错误")
 		}
 		if _, err := url.Parse("https://" + host); err != nil {
@@ -67,8 +69,8 @@ func normalizeCanvasNetworkSettings(input CanvasNetworkSettings) (*CanvasNetwork
 	if err != nil {
 		return nil, err
 	}
-	if input.Enabled && (input.ProxyID == nil || *input.ProxyID <= 0) {
-		return nil, infraerrors.BadRequest("CANVAS_NETWORK_PROXY_REQUIRED", "启用画布线路中转时必须选择代理线路")
+	if input.ProxyID != nil && *input.ProxyID <= 0 {
+		return nil, infraerrors.BadRequest("CANVAS_NETWORK_PROXY_INVALID", "请选择服务器默认线路或有效代理")
 	}
 	copy := input
 	copy.AllowedHosts = hosts
@@ -80,7 +82,7 @@ func (s *SettingService) GetCanvasNetworkSettings(ctx context.Context) (*CanvasN
 		return nil, errors.New("settings repository unavailable")
 	}
 	raw, err := s.settingRepo.GetValue(ctx, canvasNetworkSettingsKey)
-	if err != nil && !errors.Is(err, ErrSettingNotFound) && strings.TrimSpace(raw) == "" {
+	if err != nil && !errors.Is(err, ErrSettingNotFound) {
 		return nil, err
 	}
 	settings := defaultCanvasNetworkSettings()
@@ -100,6 +102,11 @@ func (s *SettingService) SetCanvasNetworkSettings(ctx context.Context, input Can
 	if s == nil || s.settingRepo == nil {
 		return nil, errors.New("settings repository unavailable")
 	}
+	if settings.ProxyID != nil {
+		if _, err := s.CanvasNetworkProxyURL(ctx, settings.ProxyID); err != nil {
+			return nil, infraerrors.BadRequest("CANVAS_NETWORK_PROXY_INVALID", "所选代理不可用或已过期，请刷新线路列表后重试")
+		}
+	}
 	data, err := json.Marshal(settings)
 	if err != nil {
 		return nil, err
@@ -111,8 +118,8 @@ func (s *SettingService) SetCanvasNetworkSettings(ctx context.Context, input Can
 }
 
 func (s *SettingService) CanvasNetworkProxyURL(ctx context.Context, id *int64) (string, error) {
-	if id == nil || *id <= 0 {
-		return "", errors.New("canvas relay proxy is not configured")
+	if id == nil {
+		return "", nil
 	}
 	if s == nil || s.proxyRepo == nil {
 		return "", errors.New("proxy repository unavailable")
@@ -121,7 +128,7 @@ func (s *SettingService) CanvasNetworkProxyURL(ctx context.Context, id *int64) (
 	if err != nil {
 		return "", err
 	}
-	if proxy == nil || !proxy.IsActive() {
+	if proxy == nil || !proxy.IsActive() || proxy.IsExpired(time.Now()) {
 		return "", errors.New("canvas relay proxy is inactive")
 	}
 	return proxy.URL(), nil

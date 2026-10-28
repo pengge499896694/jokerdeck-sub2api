@@ -48,7 +48,7 @@
           <ClientNodesPanel />
         </div>
 
-        <div v-show="activeTab === 'canvasRoute'" class="space-y-6">
+        <div v-if="activeTab === 'canvasRoute'" class="space-y-6">
           <CanvasNetworkSettings />
         </div>
 
@@ -8872,7 +8872,7 @@
         </div>
 
         <!-- Save Button -->
-        <div v-show="activeTab !== 'backup' && activeTab !== 'clientNodes'" class="flex justify-end">
+        <div v-show="activeTab !== 'backup' && activeTab !== 'clientNodes' && activeTab !== 'canvasRoute'" class="flex justify-end">
           <button
             type="submit"
             :disabled="saving || loadFailed"
@@ -9077,7 +9077,7 @@ type SettingsTab =
   | "payment"
   | "email"
   | "backup";
-const activeTab = ref<SettingsTab>("general");
+const activeTab = ref<SettingsTab>(new URLSearchParams(window.location.search).get("tab") === "canvasRoute" ? "canvasRoute" : "general");
 const settingsTabs = [
   { key: "clientNodes" as SettingsTab, icon: "server" as const },
   { key: "canvasRoute" as SettingsTab, icon: "globe" as const },

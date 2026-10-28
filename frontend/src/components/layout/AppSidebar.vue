@@ -211,6 +211,7 @@ import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
 import { XIANYU_RECHARGE_ENABLED, XIANYU_STORE_ENABLED } from '@/constants/xianyu'
 import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
+import { useCanvasNetworkAccess } from '@/composables/useCanvasNetworkAccess'
 
 interface NavItem {
   path: string
@@ -257,6 +258,7 @@ const authStore = useAuthStore()
 const onboardingStore = useOnboardingStore()
 const adminSettingsStore = useAdminSettingsStore()
 const { canUseBatchImage, refreshBatchImageAccess } = useBatchImageAccess()
+const { canAccessOptimizedCanvas, refreshCanvasNetworkAccess } = useCanvasNetworkAccess()
 
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 const mobileOpen = computed(() => appStore.mobileOpen)
@@ -763,6 +765,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     ...(authStore.hasConversationLogAccess ? [{ path: '/conversation-logs', label: '对话记录', icon: BookIcon }] : []),
     { path: '/client-guide', label: '客户端教程', icon: BookIcon },
     { path: '/canvas', label: '无限画布', icon: BatchImageIcon },
+    ...(canAccessOptimizedCanvas.value ? [{ path: '/canvas-optimized', label: '无限画布（国内优化）', icon: BatchImageIcon }] : []),
     { path: '/canvas-guide', label: '无限画布教程', icon: BookIcon },
     { path: '/batch-image', label: t('nav.batchImage'), icon: BatchImageIcon, hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
@@ -1006,6 +1009,7 @@ watch(
 )
 
 onMounted(() => {
+  void refreshCanvasNetworkAccess()
   void refreshBatchImageAccess()
   if (isAdmin.value) {
     adminSettingsStore.fetch()

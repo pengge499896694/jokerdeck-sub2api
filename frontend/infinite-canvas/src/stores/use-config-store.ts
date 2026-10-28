@@ -87,20 +87,26 @@ const LEGACY_AUTO_CHANNEL_PREFIX = "sub2api-key-";
 export const LOCAL_PROXY_PACKAGE = "@basketikun/canvas-proxy";
 export const DEFAULT_LOCAL_PROXY_URL = "http://127.0.0.1:23210";
 
-let serverCanvasRelay: { enabled: boolean; endpoint: string } = { enabled: false, endpoint: "" };
+let serverCanvasRelay: { enabled: boolean; endpoint: string; allowedHosts: string[] } = { enabled: false, endpoint: "", allowedHosts: [] };
+
+export function isOptimizedCanvasEntry() {
+  return window.name === "jokerdeck-canvas-optimized" || new URLSearchParams(window.location.search).get("network") === "optimized";
+}
 
 /** Load the optional server-side relay before canvas actions begin. Fail closed when unavailable. */
 export async function initializeServerCanvasRelay() {
-  if (useConfigStore.getState().config.proxyEnabled) return;
+  if (!isOptimizedCanvasEntry()) return;
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 1500);
   try {
-    const response = await fetch("/api/v1/canvas/network-config", { credentials: "include", cache: "no-store", signal: controller.signal });
-    const data = response.ok ? (await response.json()) as { enabled?: boolean; endpoint?: string } : null;
-    const endpoint = typeof data?.endpoint === "string" && data.endpoint.startsWith("/api/") ? data.endpoint : "";
-    serverCanvasRelay = { enabled: data?.enabled === true && Boolean(endpoint), endpoint };
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+    const response = await fetch("/api/v1/canvas/network-config", { headers: { Authorization: `Bearer ${token}` }, credentials: "same-origin", cache: "no-store", signal: controller.signal });
+    const data = response.ok ? (await response.json()) as { enabled?: boolean; endpoint?: string; allowed_hosts?: string[] } : null;
+    const endpoint = data?.endpoint === "/api/v1/canvas/network/fetch" ? data.endpoint : "";
+    serverCanvasRelay = { enabled: data?.enabled === true && Boolean(endpoint), endpoint, allowedHosts: data?.allowed_hosts || [] };
   } catch {
-    serverCanvasRelay = { enabled: false, endpoint: "" };
+    serverCanvasRelay = { enabled: false, endpoint: "", allowedHosts: [] };
   } finally {
     window.clearTimeout(timeout);
   }
@@ -697,8 +703,16 @@ export function withLocalProxy(url: string) {
 /** Route external canvas assets through the opt-in same-origin server relay. */
 export function withCanvasNetworkProxy(url: string) {
   if (!/^https?:\/\//i.test(url)) return url;
+  if (isOptimizedCanvasEntry() && serverCanvasRelay.enabled) {
+    try {
+      const target = new URL(url);
+      const host = target.hostname.toLowerCase().replace(/\.$/, "");
+      if (!target.username && !target.password && serverCanvasRelay.allowedHosts.some(suffix => host === suffix || host.endsWith(`.${suffix}`))) {
+        return `${serverCanvasRelay.endpoint}?url=${encodeURIComponent(url)}`;
+      }
+    } catch { return url; }
+  }
   const local = withLocalProxy(url);
   if (local !== url) return local;
-  if (!serverCanvasRelay.enabled) return url;
-  return `${serverCanvasRelay.endpoint}?url=${encodeURIComponent(url)}`;
+  return url;
 }

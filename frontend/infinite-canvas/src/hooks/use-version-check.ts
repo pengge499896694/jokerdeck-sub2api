@@ -3,6 +3,7 @@ import { App } from "antd";
 import { useTranslation } from "react-i18next";
 import { APP_VERSION } from "@/constant/env";
 import { parseChangelog, type ReleaseInfo } from "@/lib/release";
+import { withCanvasNetworkProxy } from "@/stores/use-config-store";
 
 const latestVersionUrl = "https://raw.githubusercontent.com/basketikun/infinite-canvas/main/VERSION";
 const latestChangelogUrl = "https://raw.githubusercontent.com/basketikun/infinite-canvas/main/CHANGELOG.md";
@@ -36,7 +37,7 @@ export function useVersionCheck() {
 
     const checkLatestVersion = useCallback(async () => {
         try {
-            const response = await fetch(latestVersionUrl);
+            const response = await fetch(withCanvasNetworkProxy(latestVersionUrl));
             if (!response.ok) return false;
             const version = await response.text();
             setLatestVersion(version.trim() || currentVersion);
@@ -50,7 +51,7 @@ export function useVersionCheck() {
         async (showMessage = false) => {
             setChecking(true);
             try {
-                const [versionResponse, changelogResponse] = await Promise.all([fetch(latestVersionUrl), fetch(latestChangelogUrl)]);
+                const [versionResponse, changelogResponse] = await Promise.all([fetch(withCanvasNetworkProxy(latestVersionUrl)), fetch(withCanvasNetworkProxy(latestChangelogUrl))]);
                 if (!versionResponse.ok) throw new Error(t("version.readFailed"));
                 if (!changelogResponse.ok) throw new Error(t("version.changelogFailed"));
                 const [version, changelog] = await Promise.all([versionResponse.text(), changelogResponse.text()]);

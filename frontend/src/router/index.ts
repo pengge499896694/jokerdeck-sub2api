@@ -240,6 +240,12 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/canvas-optimized',
+    name: 'OptimizedCanvas',
+    component: () => import('@/views/user/OptimizedCanvasView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, title: '无限画布（国内优化）' }
+  },
+  {
     path: '/canvas-guide',
     name: 'InfiniteCanvasGuide',
     component: () => import('@/views/user/InfiniteCanvasGuideView.vue'),

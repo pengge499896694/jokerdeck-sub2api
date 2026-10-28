@@ -19,8 +19,7 @@ func TestCanvasNetworkSettingsDefaultsAndRoundTrip(t *testing.T) {
 	require.False(t, settings.VisibleToUsers)
 	require.Equal(t, defaultCanvasNetworkHosts, settings.AllowedHosts)
 
-	proxyID := int64(42)
-	input := CanvasNetworkSettings{Enabled: true, VisibleToUsers: false, ProxyID: &proxyID, AllowedHosts: []string{" raw.githubusercontent.com ", "github.com", "github.com"}}
+	input := CanvasNetworkSettings{Enabled: true, VisibleToUsers: false, AllowedHosts: []string{" raw.githubusercontent.com ", "github.com", "github.com"}}
 	saved, err := svc.SetCanvasNetworkSettings(ctx, input)
 	require.NoError(t, err)
 	require.Equal(t, []string{"raw.githubusercontent.com", "github.com"}, saved.AllowedHosts)
@@ -37,7 +36,8 @@ func TestCanvasNetworkSettingsRejectUnsafeOrIncompleteValuesWithoutWrite(t *test
 	require.NoError(t, err)
 	original := repo.raw
 
-	_, err = svc.SetCanvasNetworkSettings(ctx, CanvasNetworkSettings{Enabled: true, AllowedHosts: defaultCanvasNetworkHosts})
+	invalidProxyID := int64(-1)
+	_, err = svc.SetCanvasNetworkSettings(ctx, CanvasNetworkSettings{Enabled: true, ProxyID: &invalidProxyID, AllowedHosts: defaultCanvasNetworkHosts})
 	require.Error(t, err)
 	require.Equal(t, original, repo.raw)
 

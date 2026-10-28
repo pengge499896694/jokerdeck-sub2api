@@ -1,3 +1,4 @@
+import { withCanvasNetworkProxy } from "@/stores/use-config-store";
 import { App, Button, Empty, Modal, Space, Table, Tag } from "antd";
 import { Copy, FolderPlus, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -75,7 +76,7 @@ export function PromptSourceContentModal({ source, onClose }: { source: PromptSo
                             title: t("config.promptSources.content.cover"),
                             dataIndex: "coverUrl",
                             width: 72,
-                            render: (coverUrl: string) => (coverUrl ? <img src={coverUrl} alt="" className="size-12 rounded object-cover" /> : <div className="size-12 rounded bg-stone-100 dark:bg-stone-800" />),
+                            render: (coverUrl: string) => (coverUrl ? <img src={withCanvasNetworkProxy(coverUrl)} alt="" className="size-12 rounded object-cover" /> : <div className="size-12 rounded bg-stone-100 dark:bg-stone-800" />),
                         },
                         {
                             title: t("config.promptSources.content.titleColumn"),

@@ -9,13 +9,13 @@ import { AppProviders } from "@/components/layout/app-providers";
 import "@/i18n";
 import { initAnalytics } from "@/lib/analytics";
 import { router } from "@/router";
-import { initializeServerCanvasRelay } from "@/stores/use-config-store";
+import { initializeServerCanvasRelay, isOptimizedCanvasEntry } from "@/stores/use-config-store";
 
 initAnalytics();
 
 document.body.style.fontFamily = '"SF Pro Display","SF Pro Text","PingFang SC","Microsoft YaHei","Helvetica Neue",sans-serif';
 
-void initializeServerCanvasRelay().finally(() => {
+function renderApp() {
     createRoot(document.getElementById("root")!).render(
         <React.StrictMode>
             <AppProviders>
@@ -23,4 +23,11 @@ void initializeServerCanvasRelay().finally(() => {
             </AppProviders>
         </React.StrictMode>,
     );
-});
+}
+if (isOptimizedCanvasEntry()) {
+    void initializeServerCanvasRelay().finally(renderApp);
+    // Refresh the narrowly scoped asset cookie while this canvas remains open.
+    window.setInterval(() => { void initializeServerCanvasRelay(); }, 5 * 60_000);
+} else {
+    renderApp();
+}
