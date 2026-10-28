@@ -6,6 +6,7 @@ import { getMediaBlob } from "@/services/file-storage";
 import { getImageBlob } from "@/services/image-storage";
 import type { CanvasExportAsset, CanvasExportFile } from "@/types/canvas-export";
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
+import { withCanvasNetworkProxy } from "@/stores/use-config-store";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 export async function exportCanvasProjects(projects: CanvasProject[], fileName = i18n.t("canvas.export.defaultProjectName")) {
@@ -53,7 +54,7 @@ export async function exportCanvasNodes(nodes: CanvasNodeData[], fileName = i18n
             if (node.type === CanvasNodeType.Text) return void zipFiles.push({ name: uniqueName(title, "txt"), data: node.metadata?.content || node.metadata?.prompt || "" });
             const content = node.metadata?.content;
             if (content && content.startsWith("data:")) {
-                const blob = await (await fetch(content)).blob();
+                const blob = await (await fetch(withCanvasNetworkProxy(content))).blob();
                 return void zipFiles.push({ name: uniqueName(title, fileExtension(blob.type, storageKey)), data: blob });
             }
             zipFiles.push({ name: uniqueName(title, "json"), data: JSON.stringify(node, null, 2) });

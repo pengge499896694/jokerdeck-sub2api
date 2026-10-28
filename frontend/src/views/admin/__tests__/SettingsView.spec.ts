@@ -34,6 +34,9 @@ const {
   deleteProvider,
   fetchPublicSettings,
   adminSettingsFetch,
+  canvasNetworkGet,
+  canvasNetworkUpdate,
+  getAllProxies,
   showError,
   showSuccess,
 } = vi.hoisted(() => ({
@@ -69,12 +72,15 @@ const {
   updateOllamaCloudUsageSettings: vi.fn().mockImplementation(async (payload) => payload),
   getGroups: vi.fn(),
   listProxies: vi.fn(),
+  getAllProxies: vi.fn().mockResolvedValue([]),
   getProviders: vi.fn(),
   updateProvider: vi.fn(),
   createProvider: vi.fn(),
   deleteProvider: vi.fn(),
   fetchPublicSettings: vi.fn(),
   adminSettingsFetch: vi.fn(),
+  canvasNetworkGet: vi.fn().mockResolvedValue({ enabled: false, visible_to_users: false, proxy_id: null, allowed_hosts: ['github.com'] }),
+  canvasNetworkUpdate: vi.fn(),
   showError: vi.fn(),
   showSuccess: vi.fn(),
 }));
@@ -83,6 +89,10 @@ const localeRef = vi.hoisted(() => ({ value: "zh-CN" }));
 
 vi.mock("@/api", () => ({
   adminAPI: {
+    canvasNetwork: {
+      getSettings: canvasNetworkGet,
+      updateSettings: canvasNetworkUpdate,
+    },
     settings: {
       getSettings,
       updateSettings,
@@ -109,6 +119,7 @@ vi.mock("@/api", () => ({
     },
     proxies: {
       list: listProxies,
+      getAll: getAllProxies,
     },
     payment: {
       getProviders,

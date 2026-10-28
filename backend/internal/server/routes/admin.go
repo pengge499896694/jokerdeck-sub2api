@@ -596,6 +596,8 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpA
 		adminSettings.GET("/client-provider-policy", h.Admin.Setting.GetClientProviderPolicy)
 		adminSettings.GET("/commerce-links", h.Admin.Setting.GetCommerceLinks)
 		adminSettings.PUT("/commerce-links", h.Admin.Setting.UpdateCommerceLinks)
+		adminSettings.GET("/canvas-network", h.Admin.Setting.GetCanvasNetworkSettings)
+		adminSettings.PUT("/canvas-network", h.Admin.Setting.UpdateCanvasNetworkSettings)
 		adminSettings.PUT("/client-provider-policy", h.Admin.Setting.UpdateClientProviderPolicy)
 		adminSettings.POST("/test-smtp", h.Admin.Setting.TestSMTPConnection)
 		adminSettings.POST("/send-test-email", h.Admin.Setting.SendTestEmail)

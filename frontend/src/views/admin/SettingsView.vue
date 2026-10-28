@@ -48,6 +48,10 @@
           <ClientNodesPanel />
         </div>
 
+        <div v-show="activeTab === 'canvasRoute'" class="space-y-6">
+          <CanvasNetworkSettings />
+        </div>
+
         <!-- Tab: Security — Admin API Key -->
         <div v-show="activeTab === 'security'" class="space-y-6">
           <AdminAccessKeysSettings />
@@ -8982,6 +8986,7 @@ import AppLayout from "@/components/layout/AppLayout.vue";
 import ClientNodesPanel from "./settings/ClientNodesPanel.vue";
 import ClientProviderPolicy from "@/components/admin/ClientProviderPolicy.vue";
 import CommerceLinksSettings from "@/components/admin/CommerceLinksSettings.vue";
+import CanvasNetworkSettings from "@/components/admin/CanvasNetworkSettings.vue";
 import Icon from "@/components/icons/Icon.vue";
 import Select, { type SelectOption } from "@/components/common/Select.vue";
 import {
@@ -9062,6 +9067,7 @@ const paymentMethodsHref = computed(() =>
 
 type SettingsTab =
   | "clientNodes"
+  | "canvasRoute"
   | "general"
   | "agreement"
   | "features"
@@ -9074,6 +9080,7 @@ type SettingsTab =
 const activeTab = ref<SettingsTab>("general");
 const settingsTabs = [
   { key: "clientNodes" as SettingsTab, icon: "server" as const },
+  { key: "canvasRoute" as SettingsTab, icon: "globe" as const },
   { key: "general" as SettingsTab, icon: "home" as const },
   { key: "agreement" as SettingsTab, icon: "document" as const },
   { key: "features" as SettingsTab, icon: "bolt" as const },

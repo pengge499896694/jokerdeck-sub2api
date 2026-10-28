@@ -1,4 +1,5 @@
 import clientNodesAPI from './clientNodes'
+import canvasNetworkAPI from './canvasNetwork'
 /**
  * Admin API barrel export
  * Centralized exports for all admin API modules
@@ -44,6 +45,7 @@ import feedbackAPI from './feedback'
  */
 export const adminAPI = {
   clientNodes: clientNodesAPI,
+  canvasNetwork: canvasNetworkAPI,
   dashboard: dashboardAPI,
   users: usersAPI,
   groups: groupsAPI,

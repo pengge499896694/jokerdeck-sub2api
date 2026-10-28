@@ -6,7 +6,7 @@ import { dataUrlToFile, readFileAsDataUrl } from "@/lib/image-utils";
 import { clampVideoSeconds, computeVideoSize, inferVideoRatio } from "@/lib/media-size";
 import { getMediaBlob, resolveMediaUrl, uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { imageToDataUrl } from "@/services/image-storage";
-import { boolConfig, buildApiUrl, modelOptionName, resolveModelRequestConfig, resolveModelScript, withLocalProxy, type AiConfig } from "@/stores/use-config-store";
+import { boolConfig, buildApiUrl, modelOptionName, resolveModelRequestConfig, resolveModelScript, withLocalProxy, withCanvasNetworkProxy, type AiConfig } from "@/stores/use-config-store";
 import { runModelPlugin } from "./model-plugin";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
@@ -254,7 +254,7 @@ async function pollOpenAIVideoTask(config: AiConfig, task: VideoGenerationTask, 
 
 async function videoResultFromUrl(url: string, options?: RequestOptions): Promise<VideoGenerationResult> {
     try {
-        const response = await axios.get<Blob>(withLocalProxy(url), { responseType: "blob", signal: options?.signal });
+        const response = await axios.get<Blob>(withCanvasNetworkProxy(url), { responseType: "blob", signal: options?.signal });
         await assertVideoBlob(response.data);
         return { blob: normalizeVideoBlob(response.data) };
     } catch (error) {
@@ -361,7 +361,7 @@ async function referenceMediaToFile(item: { name: string; type?: string; url?: s
         const url = item.storageKey ? await resolveMediaUrl(item.storageKey, item.url || "") : item.url || "";
         if (!url) throw new Error(apiText(errorKey));
         try {
-            blob = await (await fetch(url, { signal: options?.signal })).blob();
+            blob = await (await fetch(withCanvasNetworkProxy(url), { signal: options?.signal })).blob();
         } catch (error) {
             if (error instanceof DOMException && error.name === "AbortError") throw error;
             throw new Error(apiText(errorKey));

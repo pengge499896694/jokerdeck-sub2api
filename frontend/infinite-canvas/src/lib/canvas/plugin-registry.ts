@@ -1,4 +1,5 @@
 import { PLUGIN_REGISTRY_URL } from "@/constant/env";
+import { withCanvasNetworkProxy } from "@/stores/use-config-store";
 
 // An official registry item whose entry has been resolved to an absolute URL.
 export type OfficialPluginEntry = {
@@ -15,7 +16,7 @@ type RawManifest = { plugins?: RawEntry[] };
 
 // Fetch the official registry and resolve relative entries against its URL for the existing URL installation flow.
 export async function fetchOfficialPlugins(registryUrl: string = PLUGIN_REGISTRY_URL): Promise<OfficialPluginEntry[]> {
-    const response = await fetch(registryUrl, { headers: { accept: "application/json" } });
+    const response = await fetch(withCanvasNetworkProxy(registryUrl), { headers: { accept: "application/json" } });
     if (!response.ok) throw new Error(i18n.t("canvas.pluginErrors.registryFailed", { status: response.status }));
     const data = (await response.json()) as RawManifest;
     const list = Array.isArray(data?.plugins) ? data.plugins : [];

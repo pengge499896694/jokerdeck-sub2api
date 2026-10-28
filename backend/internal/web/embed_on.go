@@ -137,6 +137,7 @@ func serveCanvasAppIndex(c *gin.Context, distFS fs.FS) {
 		return
 	}
 	c.Header("Cache-Control", "no-cache")
+	setModulePreloadHeader(c, content)
 	c.Data(http.StatusOK, "text/html; charset=utf-8", content)
 	c.Abort()
 }
@@ -434,8 +435,30 @@ func serveIndexHTML(c *gin.Context, fsys fs.FS) {
 		return
 	}
 
+	setModulePreloadHeader(c, content)
 	c.Data(http.StatusOK, "text/html; charset=utf-8", content)
 	c.Abort()
+}
+
+// setModulePreloadHeader lets the browser begin fetching the entry bundle while
+// it is still parsing HTML. Both the main SPA and the canvas are fingerprinted
+// builds, so the path is safe to advertise and remains cacheable.
+func setModulePreloadHeader(c *gin.Context, content []byte) {
+	const marker = `type="module" crossorigin src="`
+	start := bytes.Index(content, []byte(marker))
+	if start < 0 {
+		return
+	}
+	start += len(marker)
+	end := bytes.IndexByte(content[start:], '"')
+	if end <= 0 {
+		return
+	}
+	entry := string(content[start : start+end])
+	if !strings.HasPrefix(entry, "/") || !isFingerprintedEmbeddedAssetPath(strings.TrimPrefix(entry, "/")) && !strings.HasPrefix(entry, "/infinite-canvas/assets/") {
+		return
+	}
+	c.Header("Link", "<"+entry+">; rel=preload; as=script")
 }
 
 func HasEmbeddedFrontend() bool {

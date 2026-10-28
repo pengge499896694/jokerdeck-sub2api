@@ -217,6 +217,7 @@ func ProvideHandlers(
 	xianyuRechargeHandler *XianyuRechargeHandler,
 	conversationLogHandler *ConversationLogHandler,
 	canvasHandler *CanvasHandler,
+	canvasNetworkHandler *CanvasNetworkHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 	_ *service.OpenAIQuotaAutoResetService,
@@ -248,6 +249,7 @@ func ProvideHandlers(
 		XianyuRecharge:   xianyuRechargeHandler,
 		ConversationLog:  conversationLogHandler,
 		Canvas:           canvasHandler,
+		CanvasNetwork:    canvasNetworkHandler,
 	}
 }
 
@@ -279,6 +281,7 @@ var ProviderSet = wire.NewSet(
 	NewXianyuRechargeHandler,
 	NewConversationLogHandler,
 	NewCanvasHandler,
+	NewCanvasNetworkHandler,
 
 	// Admin handlers
 	admin.NewDashboardHandler,

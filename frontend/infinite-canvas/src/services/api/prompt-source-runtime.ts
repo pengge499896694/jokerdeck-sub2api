@@ -1,5 +1,6 @@
 import i18n from "@/i18n";
 import type { PromptSource } from "./prompt-source-presets";
+import { withCanvasNetworkProxy } from "@/stores/use-config-store";
 
 export type RawPrompt = {
     id: string;
@@ -23,7 +24,7 @@ export type RawPrompt = {
 type RunOptions = { signal?: AbortSignal };
 
 async function fetchSource(source: PromptSource, options?: RunOptions) {
-    const response = await fetch(source.url, { cache: "no-store", signal: options?.signal });
+    const response = await fetch(withCanvasNetworkProxy(source.url), { cache: "no-store", signal: options?.signal });
     if (!response.ok) throw new Error(i18n.t("config.promptSources.runtime.requestFailed", { status: response.status }));
     return response.json();
 }

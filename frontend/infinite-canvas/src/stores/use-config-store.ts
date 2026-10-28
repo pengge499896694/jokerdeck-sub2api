@@ -87,6 +87,25 @@ const LEGACY_AUTO_CHANNEL_PREFIX = "sub2api-key-";
 export const LOCAL_PROXY_PACKAGE = "@basketikun/canvas-proxy";
 export const DEFAULT_LOCAL_PROXY_URL = "http://127.0.0.1:23210";
 
+let serverCanvasRelay: { enabled: boolean; endpoint: string } = { enabled: false, endpoint: "" };
+
+/** Load the optional server-side relay before canvas actions begin. Fail closed when unavailable. */
+export async function initializeServerCanvasRelay() {
+  if (useConfigStore.getState().config.proxyEnabled) return;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 1500);
+  try {
+    const response = await fetch("/api/v1/canvas/network-config", { credentials: "include", cache: "no-store", signal: controller.signal });
+    const data = response.ok ? (await response.json()) as { enabled?: boolean; endpoint?: string } : null;
+    const endpoint = typeof data?.endpoint === "string" && data.endpoint.startsWith("/api/") ? data.endpoint : "";
+    serverCanvasRelay = { enabled: data?.enabled === true && Boolean(endpoint), endpoint };
+  } catch {
+    serverCanvasRelay = { enabled: false, endpoint: "" };
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 export const defaultConfig: AiConfig = {
   channelMode: "local",
   baseUrl: "",
@@ -673,4 +692,13 @@ export function withLocalProxy(url: string) {
   const base = normalizeLocalProxyUrl(proxyUrl);
   if (!base || url.startsWith(`${base}/`)) return url;
   return `${base}/${url}`;
+}
+
+/** Route external canvas assets through the opt-in same-origin server relay. */
+export function withCanvasNetworkProxy(url: string) {
+  if (!/^https?:\/\//i.test(url)) return url;
+  const local = withLocalProxy(url);
+  if (local !== url) return local;
+  if (!serverCanvasRelay.enabled) return url;
+  return `${serverCanvasRelay.endpoint}?url=${encodeURIComponent(url)}`;
 }

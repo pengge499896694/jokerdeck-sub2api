@@ -92,6 +92,8 @@ func RegisterUserRoutes(
 
 		canvas := authenticated.Group("/canvas")
 		{
+			canvas.GET("/network-config", h.CanvasNetwork.GetConfig)
+			canvas.GET("/network/fetch", h.CanvasNetwork.Fetch)
 			canvas.GET("", h.Canvas.List)
 			canvas.POST("", h.Canvas.Create)
 			canvas.GET("/:id", h.Canvas.Get)

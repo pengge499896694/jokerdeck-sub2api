@@ -9,6 +9,7 @@ import { formatBytes, readFileAsDataUrl } from "@/lib/image-utils";
 import { getMediaBlob } from "@/services/file-storage";
 import { getImageBlob, getImagePreviewRevision, subscribeImagePreviews, uploadImage } from "@/services/image-storage";
 import { cn } from "@/lib/utils";
+import { withCanvasNetworkProxy } from "@/stores/use-config-store";
 import { assetCoverUrl, useAssetStore, type Asset, type AssetKind, type ImageAsset } from "@/stores/use-asset-store";
 import { exportAssets, readAssetPackage } from "./asset-transfer";
 
@@ -551,7 +552,7 @@ async function readAssetMediaBlob(asset: Extract<Asset, { kind: "image" | "video
     }
     const url = asset.kind === "video" ? asset.data.url : asset.data.dataUrl || asset.coverUrl;
     if (!url) return null;
-    const response = await fetch(url);
+    const response = await fetch(withCanvasNetworkProxy(url));
     return response.ok ? response.blob() : null;
 }
 

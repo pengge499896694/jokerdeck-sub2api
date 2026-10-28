@@ -77,6 +77,7 @@ type Handlers struct {
 	XianyuRecharge   *XianyuRechargeHandler
 	ConversationLog  *ConversationLogHandler
 	Canvas           *CanvasHandler
+	CanvasNetwork    *CanvasNetworkHandler
 }
 
 // BuildInfo contains build-time information

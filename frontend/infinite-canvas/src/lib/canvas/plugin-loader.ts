@@ -3,6 +3,7 @@ import { getPluginRuntime } from "@/lib/canvas/plugin-runtime";
 import { usePluginStore, type InstalledPlugin } from "@/stores/canvas/use-plugin-store";
 import type { CanvasPlugin } from "@/types/canvas-plugin";
 import i18n from "@/i18n";
+import { withCanvasNetworkProxy } from "@/stores/use-config-store";
 
 const cleanups = new Map<string, () => void>();
 
@@ -46,7 +47,7 @@ export function deactivatePlugin(pluginId: string) {
 }
 
 async function fetchPluginSource(url: string) {
-    const response = await fetch(url);
+    const response = await fetch(withCanvasNetworkProxy(url));
     if (!response.ok) throw new Error(i18n.t("canvas.pluginErrors.downloadFailed", { status: response.status }));
     return response.text();
 }
