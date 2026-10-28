@@ -61,6 +61,30 @@ func TestGrokAPIKeyURLPolicyFollowsGlobalSecurityConfig(t *testing.T) {
 	})
 }
 
+func TestBuildSoraMediaURLs(t *testing.T) {
+	account := &Account{
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"base_url": "https://zl.yyapi.cloud",
+		},
+	}
+	cfg := &config.Config{}
+	cfg.Security.URLAllowlist.Enabled = false
+
+	createURL, err := buildSoraMediaURL(account, cfg, GrokMediaEndpointVideosGenerations, "")
+	require.NoError(t, err)
+	require.Equal(t, "https://zl.yyapi.cloud/v1/videos", createURL)
+
+	statusURL, err := buildSoraMediaURL(account, cfg, GrokMediaEndpointVideoStatus, "task_123")
+	require.NoError(t, err)
+	require.Equal(t, "https://zl.yyapi.cloud/v1/videos/task_123", statusURL)
+
+	contentURL, err := buildSoraMediaURL(account, cfg, GrokMediaEndpointVideoContent, "task_123")
+	require.NoError(t, err)
+	require.Equal(t, "https://media.yyapi.cloud/public/videos/task_123/content", contentURL)
+}
+
 func TestGrokAPIKeyURLPolicyAppliesAllowlistAndPrivateHostControls(t *testing.T) {
 	account := &Account{
 		Platform: PlatformGrok,

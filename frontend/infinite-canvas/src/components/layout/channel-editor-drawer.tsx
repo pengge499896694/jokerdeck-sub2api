@@ -38,6 +38,7 @@ export function ChannelEditorDrawer({
   const apiFormatOptions: Array<{ label: string; value: ApiCallFormat }> = [
     { label: "OpenAI", value: "openai" },
     { label: "Gemini", value: "gemini" },
+    { label: "Sora", value: "sora" },
   ];
   const capabilityOptions: Array<{ label: string; value: ModelCapability }> = [
     "image",

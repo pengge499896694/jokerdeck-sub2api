@@ -2343,7 +2343,7 @@ function InfiniteCanvasPage() {
                 setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, prompt: scene, status: NODE_STATUS_LOADING, errorDetails: undefined } } : node)));
                 try {
                     const fullPrompt = (builtinPanel.promptPrefix || "") + scene;
-                    const context = await hydrateNodeGenerationContext(buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, fullPrompt));
+                    const context = await hydrateNodeGenerationContext(buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, fullPrompt), controller.signal);
                     const refs = context.referenceImages;
                     const image = refs.length
                         ? await requestEdit({ ...generationConfig, count: "1" }, context.prompt, refs, { signal: controller.signal }).then((items) => items[0])
@@ -2372,6 +2372,7 @@ function InfiniteCanvasPage() {
             const editingTextNode = mode === "text" && Boolean(sourceTextContent);
             const generationContext = await hydrateNodeGenerationContext(
                 buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, editingTextNode ? t("canvas.projectPage.editTextPrompt", { source: sourceTextContent, prompt }) : prompt),
+                runController.signal,
             );
             const effectivePrompt = generationContext.prompt.trim();
             if (runController.signal.aborted) {

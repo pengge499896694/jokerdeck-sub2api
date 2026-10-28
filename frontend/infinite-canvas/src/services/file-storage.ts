@@ -33,6 +33,30 @@ export async function getMediaBlob(storageKey: string) {
     return store.getItem<Blob>(storageKey);
 }
 
+export async function normalizeStoredVideo(storageKey: string) {
+    const blob = await getMediaBlob(storageKey);
+    if (!blob || blob.type.startsWith("video/")) return blob;
+    const normalized = blob.slice(0, blob.size, "video/mp4");
+    await store.setItem(storageKey, normalized);
+    const previousUrl = objectUrls.get(storageKey);
+    if (previousUrl) URL.revokeObjectURL(previousUrl);
+    const url = URL.createObjectURL(normalized);
+    objectUrls.set(storageKey, url);
+    return normalized;
+}
+
+export async function refreshStoredVideoUrl(storageKey: string, fallback = "") {
+    const blob = await getMediaBlob(storageKey);
+    if (!blob || !blob.size) return fallback;
+    const normalized = blob.type.startsWith("video/") ? blob : blob.slice(0, blob.size, "video/mp4");
+    if (normalized !== blob) await store.setItem(storageKey, normalized);
+    const previousUrl = objectUrls.get(storageKey);
+    if (previousUrl) URL.revokeObjectURL(previousUrl);
+    const url = URL.createObjectURL(normalized);
+    objectUrls.set(storageKey, url);
+    return url;
+}
+
 export async function setMediaBlob(storageKey: string, blob: Blob) {
     await store.setItem(storageKey, blob);
     const url = URL.createObjectURL(blob);

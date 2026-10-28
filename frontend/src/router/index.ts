@@ -243,7 +243,8 @@ const routes: RouteRecordRaw[] = [
     path: '/canvas-guide',
     name: 'InfiniteCanvasGuide',
     component: () => import('@/views/user/InfiniteCanvasGuideView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: false, title: '无限画布使用教程' }
+    // Keep the guide viewable during local frontend development; production still requires login.
+    meta: { requiresAuth: import.meta.env.PROD, requiresAdmin: false, title: '无限画布使用教程' }
   },
   {
     path: '/client-guide',
@@ -908,6 +909,9 @@ router.beforeEach(async (to, _from, next) => {
   const requiresFinance = to.meta.requiresFinance === true
   const requiresConversationLogsAccess = to.meta.requiresConversationLogsAccess === true
 
+  // The guide is a static local preview in dev; keep all account-backed pages protected.
+  const isLocalGuidePreview = import.meta.env.DEV && to.path === '/canvas-guide'
+
   if (to.path === '/setup') {
     try {
       const status = await getSetupStatus()
@@ -922,6 +926,10 @@ router.beforeEach(async (to, _from, next) => {
 
   // If route doesn't require auth, allow access
   if (!requiresAuth) {
+    if (isLocalGuidePreview) {
+      next()
+      return
+    }
     // If already authenticated and trying to access login/register, redirect to appropriate dashboard
     if (authStore.isAuthenticated && (to.path === '/login' || to.path === '/register')) {
       // In backend mode, non-admin users should NOT be redirected away from login

@@ -141,6 +141,50 @@ func buildGrokMediaURL(account *Account, cfg *config.Config, endpoint GrokMediaE
 	}
 }
 
+// buildSoraMediaURL builds the OpenAI-compatible Sora video endpoints exposed
+// by video providers such as 云影. These accounts use the normal OpenAI
+// platform, but their video API is a separate /v1/videos surface.
+func buildSoraMediaURL(account *Account, cfg *config.Config, endpoint GrokMediaEndpoint, requestID string) (string, error) {
+	if account == nil || account.Platform != PlatformOpenAI {
+		return "", fmt.Errorf("openai account is required for sora media")
+	}
+	base := strings.TrimRight(strings.TrimSpace(account.GetOpenAIBaseURL()), "/")
+	if base == "" {
+		return "", fmt.Errorf("openai video base url is empty")
+	}
+	validated, err := grokOperatorPolicyValidator(cfg)(base)
+	if err != nil {
+		return "", fmt.Errorf("invalid sora base url: %w", err)
+	}
+	validated = strings.TrimRight(validated, "/")
+	if !strings.HasSuffix(strings.ToLower(validated), "/v1") {
+		validated += "/v1"
+	}
+	switch endpoint {
+	case GrokMediaEndpointVideosGenerations:
+		return validated + "/videos", nil
+	case GrokMediaEndpointVideoStatus:
+		if strings.TrimSpace(requestID) == "" {
+			return "", fmt.Errorf("request id is required")
+		}
+		return validated + "/videos/" + url.PathEscape(strings.TrimSpace(requestID)), nil
+	case GrokMediaEndpointVideoContent:
+		if strings.TrimSpace(requestID) == "" {
+			return "", fmt.Errorf("request id is required")
+		}
+		return "https://media.yyapi.cloud/public/videos/" + url.PathEscape(strings.TrimSpace(requestID)) + "/content", nil
+	default:
+		return "", fmt.Errorf("unsupported sora media endpoint: %s", endpoint)
+	}
+}
+
+func buildVideoMediaURL(account *Account, cfg *config.Config, endpoint GrokMediaEndpoint, requestID string) (string, error) {
+	if account != nil && account.Platform == PlatformOpenAI {
+		return buildSoraMediaURL(account, cfg, endpoint, requestID)
+	}
+	return buildGrokMediaURL(account, cfg, endpoint, requestID)
+}
+
 // buildGrokVoiceURL returns the official xAI Voice API endpoint.
 // Voice HTTP (/tts, /stt, /custom-voices) and WS (/realtime) are only exposed
 // by api.x.ai — the CLI chat proxy does not implement them. When the account

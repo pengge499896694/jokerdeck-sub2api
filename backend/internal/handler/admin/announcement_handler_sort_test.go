@@ -136,3 +136,14 @@ func TestAdminAnnouncementReadStatusSortDefaults(t *testing.T) {
 	require.Equal(t, "email", userRepo.listParams.SortBy)
 	require.Equal(t, "asc", userRepo.listParams.SortOrder)
 }
+
+func TestAnnouncementEmailRecipientBalanceFilter(t *testing.T) {
+	eligibleWithBalance := service.AnnouncementUserReadStatus{Eligible: true, Email: "paid@example.com", Balance: 1}
+	eligibleWithoutBalance := service.AnnouncementUserReadStatus{Eligible: true, Email: "empty@example.com", Balance: 0}
+	ineligibleWithBalance := service.AnnouncementUserReadStatus{Eligible: false, Email: "ineligible@example.com", Balance: 1}
+
+	require.True(t, announcementEmailRecipientEligible(eligibleWithBalance, true))
+	require.False(t, announcementEmailRecipientEligible(eligibleWithoutBalance, true))
+	require.False(t, announcementEmailRecipientEligible(ineligibleWithBalance, true))
+	require.True(t, announcementEmailRecipientEligible(eligibleWithoutBalance, false))
+}

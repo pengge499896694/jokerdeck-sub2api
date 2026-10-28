@@ -71,6 +71,7 @@ var requiredCSPDirectiveValues = []struct {
 	{"frame-src", TencentCaptchaGlobalDomain},
 	{"frame-src", TencentCaptchaPrehandleDomain},
 	{"worker-src", TencentCaptchaWorkerSource},
+	{"media-src", "blob:"},
 	{"script-src", StripeDomain},
 	{"frame-src", StripeDomain},
 	{"script-src", AirwallexStaticDomain},

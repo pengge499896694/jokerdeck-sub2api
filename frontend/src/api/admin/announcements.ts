@@ -74,8 +74,15 @@ export async function getReadStatus(
   return data
 }
 
-export async function sendEmail(id: number, subject?: string): Promise<{ total: number; sent: number; failed: number }> {
-  const { data } = await apiClient.post(`/admin/announcements/${id}/email`, { subject })
+export async function sendEmail(
+  id: number,
+  subject?: string,
+  options?: { balanceGtZero?: boolean }
+): Promise<{ total: number; sent: number; failed: number }> {
+  const { data } = await apiClient.post(`/admin/announcements/${id}/email`, {
+    subject,
+    balance_gt_zero: options?.balanceGtZero ?? false
+  })
   return data
 }
 

@@ -342,3 +342,16 @@ func TestRewriteGrokMediaVideoContentURLsRewritesSignedVideoURL(t *testing.T) {
 	require.Equal(t, "8", gjson.GetBytes(rewritten, "video.duration").String())
 	require.Equal(t, "done", gjson.GetBytes(rewritten, "status").String())
 }
+
+func TestRewriteSoraMediaVideoContentURLs(t *testing.T) {
+	body := []byte(`{"status":"completed","video_url":"https://media.yyapi.cloud/public/videos/task-1/content","model":"MiniMaxH3-2k"}`)
+
+	rewritten := rewriteSoraMediaVideoContentURLs(body, "task-1", "/v1/videos/task-1/content")
+
+	require.Equal(t, "/v1/videos/task-1/content", gjson.GetBytes(rewritten, "video_url").String())
+	require.Equal(t, "completed", gjson.GetBytes(rewritten, "status").String())
+	require.Equal(t, "MiniMaxH3-2k", gjson.GetBytes(rewritten, "model").String())
+
+	otherTask := []byte(`{"video_url":"https://media.yyapi.cloud/public/videos/task-2/content"}`)
+	require.Equal(t, string(otherTask), string(rewriteSoraMediaVideoContentURLs(otherTask, "task-1", "/v1/videos/task-1/content")))
+}

@@ -307,6 +307,17 @@ func (s *BillingCacheSuite) TestDeductUserBalance_ErrorPropagation() {
 			},
 		},
 		{
+			name: "insufficient_cached_balance_is_rejected",
+			fn: func(ctx context.Context, cache service.BillingCache) {
+				require.NoError(s.T(), cache.SetUserBalance(ctx, 202, 1.0))
+				err := cache.DeductUserBalance(ctx, 202, 2.0)
+				require.ErrorIs(s.T(), err, service.ErrInsufficientBalance)
+				bal, getErr := cache.GetUserBalance(ctx, 202)
+				require.NoError(s.T(), getErr)
+				require.Equal(s.T(), 1.0, bal)
+			},
+		},
+		{
 			name: "cancelled_context_propagates_error",
 			fn: func(ctx context.Context, cache service.BillingCache) {
 				require.NoError(s.T(), cache.SetUserBalance(ctx, 201, 50.0))

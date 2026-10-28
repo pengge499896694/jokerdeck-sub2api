@@ -260,6 +260,48 @@
       preview
       @close="previewAnnouncement = null"
     />
+
+    <!-- Email broadcast dialog -->
+    <BaseDialog
+      :show="showEmailDialog"
+      :title="t('admin.announcements.emailBroadcastTitle')"
+      @close="closeEmailDialog"
+    >
+      <form id="announcement-email-form" @submit.prevent="sendAnnouncementEmail" class="space-y-5">
+        <div>
+          <label class="input-label">{{ t('admin.announcements.emailBroadcastSubject') }}</label>
+          <input v-model="emailForm.subject" type="text" class="input" required maxlength="200" />
+        </div>
+
+        <fieldset>
+          <legend class="input-label">{{ t('admin.announcements.emailBroadcastAudience') }}</legend>
+          <div class="space-y-2">
+            <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 p-3 dark:border-dark-600">
+              <input v-model="emailForm.balanceGtZero" type="radio" :value="true" class="mt-1" />
+              <span>
+                <span class="block text-sm font-medium text-gray-900 dark:text-white">{{ t('admin.announcements.emailBroadcastAudienceBalance') }}</span>
+                <span class="mt-1 block text-xs text-gray-500 dark:text-gray-400">{{ t('admin.announcements.emailBroadcastBalanceHint') }}</span>
+              </span>
+            </label>
+            <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 p-3 dark:border-dark-600">
+              <input v-model="emailForm.balanceGtZero" type="radio" :value="false" class="mt-1" />
+              <span class="text-sm font-medium text-gray-900 dark:text-white">{{ t('admin.announcements.emailBroadcastAudienceEligible') }}</span>
+            </label>
+          </div>
+        </fieldset>
+      </form>
+
+      <template #footer>
+        <div class="flex justify-end gap-3">
+          <button type="button" @click="closeEmailDialog" class="btn btn-secondary">
+            {{ t('common.cancel') }}
+          </button>
+          <button type="submit" form="announcement-email-form" :disabled="emailSending" class="btn btn-primary">
+            {{ emailSending ? t('admin.announcements.emailBroadcastSending') : t('admin.announcements.emailBroadcastSend') }}
+          </button>
+        </div>
+      </template>
+    </BaseDialog>
   </AppLayout>
 </template>
 
@@ -606,15 +648,45 @@ async function confirmDelete() {
   }
 }
 
-async function handleEmail(row: Announcement) {
-  const subject = window.prompt(t('admin.announcements.emailSubjectPrompt'), row.title)
-  if (subject === null) return
-  if (!window.confirm(t('admin.announcements.emailBroadcastConfirm'))) return
+const showEmailDialog = ref(false)
+const emailingAnnouncement = ref<Announcement | null>(null)
+const emailSending = ref(false)
+const emailForm = reactive({
+  subject: '',
+  balanceGtZero: true,
+})
+
+function handleEmail(row: Announcement) {
+  emailingAnnouncement.value = row
+  emailForm.subject = row.title
+  emailForm.balanceGtZero = true
+  showEmailDialog.value = true
+}
+
+function closeEmailDialog() {
+  if (emailSending.value) return
+  showEmailDialog.value = false
+  emailingAnnouncement.value = null
+}
+
+async function sendAnnouncementEmail() {
+  if (!emailingAnnouncement.value) return
+  const announcement = emailingAnnouncement.value
+  const subject = emailForm.subject.trim()
+  if (!subject) return
+
+  emailSending.value = true
   try {
-    const result = await adminAPI.announcements.sendEmail(row.id, subject.trim() || row.title)
+    const result = await adminAPI.announcements.sendEmail(announcement.id, subject, {
+      balanceGtZero: emailForm.balanceGtZero
+    })
     appStore.showSuccess(t('admin.announcements.emailBroadcastSuccess', result))
+    emailSending.value = false
+    closeEmailDialog()
   } catch (error: any) {
     appStore.showError(error.response?.data?.detail || t('admin.announcements.emailBroadcastFailed'))
+  } finally {
+    emailSending.value = false
   }
 }
 

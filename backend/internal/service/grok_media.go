@@ -562,15 +562,29 @@ func IsGrokVideoStatusBillable(statusBody []byte) bool {
 	if len(statusBody) == 0 || !gjson.ValidBytes(statusBody) {
 		return false
 	}
-	if !isOfficialGrokVideoStatusDone(statusBody) {
+	if !isVideoStatusCompleted(statusBody) {
 		return false
 	}
-	return strings.TrimSpace(gjson.GetBytes(statusBody, "video.url").String()) != ""
+	return extractVideoStatusContentURL(statusBody) != ""
 }
 
 func isOfficialGrokVideoStatusDone(statusBody []byte) bool {
 	// Official enum: pending | done | expired | failed.
 	return strings.EqualFold(strings.TrimSpace(gjson.GetBytes(statusBody, "status").String()), "done")
+}
+
+func isVideoStatusCompleted(statusBody []byte) bool {
+	status := strings.TrimSpace(gjson.GetBytes(statusBody, "status").String())
+	return strings.EqualFold(status, "done") || strings.EqualFold(status, "completed")
+}
+
+func extractVideoStatusContentURL(statusBody []byte) string {
+	for _, path := range []string{"video.url", "video_url", "url", "download_url", "content.video_url", "content.url"} {
+		if value := strings.TrimSpace(gjson.GetBytes(statusBody, path).String()); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 // ExtractGrokVideoBillingFromStatusBody builds usage units from an official done status.
@@ -592,7 +606,11 @@ func ExtractGrokVideoBillingFromStatusBody(statusBody []byte, pending *GrokVideo
 		// Official: top-level model.
 		model = strings.TrimSpace(gjson.GetBytes(statusBody, "model").String())
 		// Official: video.duration (number of seconds).
-		if v := gjson.GetBytes(statusBody, "video.duration"); v.Exists() && v.Type == gjson.Number {
+		v := gjson.GetBytes(statusBody, "video.duration")
+		if !v.Exists() {
+			v = gjson.GetBytes(statusBody, "duration")
+		}
+		if v.Exists() && v.Type == gjson.Number {
 			durationSeconds = int(v.Int())
 			if durationSeconds == 0 && v.Float() > 0 {
 				// Sub-second values are unexpected for this API; still accept truncated int path above.
@@ -658,8 +676,8 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	if account == nil {
 		return nil, fmt.Errorf("grok account is required")
 	}
-	if account.Platform != PlatformGrok {
-		return nil, fmt.Errorf("account platform %s is not supported for grok media", account.Platform)
+	if account.Platform != PlatformGrok && !(account.Platform == PlatformOpenAI && (endpoint == GrokMediaEndpointVideosGenerations || endpoint == GrokMediaEndpointVideoStatus || endpoint == GrokMediaEndpointVideoContent)) {
+		return nil, fmt.Errorf("account platform %s is not supported for media video", account.Platform)
 	}
 
 	token, _, err := s.getRequestCredential(ctx, c, account)
@@ -669,7 +687,7 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	if endpoint == GrokMediaEndpointVideoContent {
 		return s.forwardGrokMediaVideoContent(ctx, c, account, token, requestID, startTime)
 	}
-	targetURL, err := buildGrokMediaURL(account, s.cfg, endpoint, requestID)
+	targetURL, err := buildVideoMediaURL(account, s.cfg, endpoint, requestID)
 	if err != nil {
 		return nil, err
 	}
@@ -759,11 +777,12 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 		}
 	}
 	if endpoint == GrokMediaEndpointVideoStatus {
-		respBody = rewriteGrokMediaVideoContentURLs(
-			respBody,
-			requestID,
-			grokMediaContentProxyURL(c, requestID),
-		)
+		proxyURL := grokMediaContentProxyURL(c, requestID)
+		if account.Platform == PlatformOpenAI {
+			respBody = rewriteSoraMediaVideoContentURLs(respBody, requestID, proxyURL)
+		} else {
+			respBody = rewriteGrokMediaVideoContentURLs(respBody, requestID, proxyURL)
+		}
 	}
 	writeGrokMediaResponse(c, resp, respBody, s.responseHeaderFilter)
 	usage := grokMediaUsageFromResponse(endpoint, requestInfo, respBody)
@@ -806,6 +825,43 @@ func (s *OpenAIGatewayService) forwardGrokMediaVideoContent(
 	token, requestID string,
 	startTime time.Time,
 ) (*OpenAIForwardResult, error) {
+	if account != nil && account.Platform == PlatformOpenAI {
+		contentURL, err := buildSoraMediaURL(account, s.cfg, GrokMediaEndpointVideoContent, requestID)
+		if err != nil {
+			return nil, err
+		}
+		upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
+		defer releaseUpstreamCtx()
+		req, err := http.NewRequestWithContext(WithHTTPUpstreamRedirectsDisabled(upstreamCtx), http.MethodGet, contentURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		// 云影公开视频下载接口不需要上游鉴权。
+		req.Header.Set("Accept", "video/*,application/octet-stream")
+		if c != nil {
+			if rangeHeader := strings.TrimSpace(c.GetHeader("Range")); rangeHeader != "" {
+				req.Header.Set("Range", rangeHeader)
+			}
+		}
+		account.ApplyHeaderOverrides(req.Header)
+		proxyURL := ""
+		if account.ProxyID != nil && account.Proxy != nil {
+			proxyURL = account.Proxy.URL()
+		}
+		resp, err := s.httpUpstream.Do(req, proxyURL, account.ID, account.Concurrency)
+		SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(startTime).Milliseconds())
+		if err != nil {
+			return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, err, false)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode >= 300 {
+			return s.handleGrokMediaErrorResponse(ctx, resp, c, account, resp.Header.Get("x-request-id"), "")
+		}
+		if err := writeGrokMediaContentResponse(c, resp); err != nil {
+			return nil, err
+		}
+		return &OpenAIForwardResult{RequestID: resp.Header.Get("x-request-id"), UpstreamHeaders: resp.Header, ResponseHeaders: resp.Header.Clone(), Duration: time.Since(startTime)}, nil
+	}
 	statusURL, err := buildGrokMediaURL(account, s.cfg, GrokMediaEndpointVideoStatus, requestID)
 	if err != nil {
 		return nil, err
@@ -1454,6 +1510,66 @@ func rewriteGrokMediaVideoContentURLs(body []byte, requestID, proxyURL string) [
 		return body
 	}
 	return rewritten
+}
+
+func rewriteSoraMediaVideoContentURLs(body []byte, requestID, proxyURL string) []byte {
+	if len(body) == 0 || strings.TrimSpace(requestID) == "" || strings.TrimSpace(proxyURL) == "" || !gjson.ValidBytes(body) {
+		return body
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return body
+	}
+	if !rewriteSoraMediaVideoURLValue(&value, requestID, proxyURL) {
+		return body
+	}
+	rewritten, err := json.Marshal(value)
+	if err != nil {
+		return body
+	}
+	return rewritten
+}
+
+func rewriteSoraMediaVideoURLValue(value *any, requestID, proxyURL string) bool {
+	if value == nil {
+		return false
+	}
+	switch typed := (*value).(type) {
+	case map[string]any:
+		changed := false
+		for key, child := range typed {
+			childValue := child
+			if rewriteSoraMediaVideoURLValue(&childValue, requestID, proxyURL) {
+				typed[key] = childValue
+				changed = true
+			}
+		}
+		return changed
+	case []any:
+		changed := false
+		for index, child := range typed {
+			childValue := child
+			if rewriteSoraMediaVideoURLValue(&childValue, requestID, proxyURL) {
+				typed[index] = childValue
+				changed = true
+			}
+		}
+		return changed
+	case string:
+		parsed, err := url.Parse(strings.TrimSpace(typed))
+		if err != nil || !strings.EqualFold(parsed.Scheme, "https") || !strings.EqualFold(parsed.Hostname(), "media.yyapi.cloud") {
+			return false
+		}
+		segments := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+		if len(segments) != 4 || segments[0] != "public" || segments[1] != "videos" || segments[2] != requestID || segments[3] != "content" {
+			return false
+		}
+		*value = proxyURL
+		return true
+	}
+	return false
 }
 
 func rewriteGrokMediaKnownVideoURL(value *any, proxyURL string) bool {

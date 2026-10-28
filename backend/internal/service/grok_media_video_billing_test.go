@@ -49,8 +49,8 @@ func TestIsGrokVideoStatusBillable(t *testing.T) {
 	// URL alone (legacy/non-official shapes) is not enough
 	require.False(t, IsGrokVideoStatusBillable([]byte(`{"url":"https://example.com/v.mp4"}`)))
 	require.False(t, IsGrokVideoStatusBillable([]byte(`{"download_url":"/v1/videos/task/content"}`)))
-	// "completed" is not the official enum value
-	require.False(t, IsGrokVideoStatusBillable([]byte(`{"status":"completed","video":{"url":"https://vidgen.x.ai/x.mp4"}}`)))
+	// OpenAI-compatible providers use completed + video_url.
+	require.True(t, IsGrokVideoStatusBillable([]byte(`{"status":"completed","video_url":"https://media.yyapi.cloud/public/videos/task/content"}`)))
 }
 
 func TestExtractGrokVideoBillingFromStatusBodyPrefersUpstreamParams(t *testing.T) {
@@ -104,10 +104,12 @@ func TestExtractGrokVideoBillingRejectsNonDoneStatus(t *testing.T) {
 		[]byte(`{"status":"pending","video":{"url":"https://vidgen.x.ai/x.mp4","duration":8}}`),
 		pending, "req",
 	))
-	require.Nil(t, ExtractGrokVideoBillingFromStatusBody(
-		[]byte(`{"status":"completed","video":{"url":"https://vidgen.x.ai/x.mp4","duration":8}}`),
+	compatible := ExtractGrokVideoBillingFromStatusBody(
+		[]byte(`{"status":"completed","video_url":"https://media.yyapi.cloud/public/videos/task/content","duration":8}`),
 		pending, "req",
-	))
+	)
+	require.NotNil(t, compatible)
+	require.Equal(t, 8, compatible.VideoDurationSeconds)
 }
 
 func TestGrokMediaUsageFromResponseVideoCreateDoesNotBill(t *testing.T) {
@@ -139,11 +141,12 @@ func TestGrokMediaUsageFromResponseVideoStatusBillsOnOfficialDone(t *testing.T) 
 	)
 	require.Equal(t, 0, pendingOnly.VideoCount)
 
-	// completed is not official done.
+	// OpenAI-compatible completed status is billable when it exposes a result URL.
 	completed := grokMediaUsageFromResponse(
 		GrokMediaEndpointVideoStatus,
 		GrokMediaRequestInfo{},
-		[]byte(`{"status":"completed","video":{"url":"https://vidgen.x.ai/a.mp4","duration":9}}`),
+		[]byte(`{"status":"completed","video_url":"https://media.yyapi.cloud/public/videos/task/content","duration":9}`),
 	)
-	require.Equal(t, 0, completed.VideoCount)
+	require.Equal(t, 1, completed.VideoCount)
+	require.Equal(t, 9, completed.VideoDurationSeconds)
 }

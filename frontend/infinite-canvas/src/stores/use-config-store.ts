@@ -5,7 +5,7 @@ import { nanoid } from "nanoid";
 
 import i18n from "@/i18n";
 
-export type ApiCallFormat = "openai" | "gemini";
+export type ApiCallFormat = "openai" | "gemini" | "sora";
 export type ModelCapability = "image" | "video" | "text" | "audio";
 export type ReasoningEffort = "auto" | "low" | "medium" | "high" | "xhigh";
 
@@ -642,7 +642,7 @@ function normalizeChannels(config: AiConfig) {
 }
 
 function normalizeApiFormat(apiFormat: unknown): ApiCallFormat {
-  return apiFormat === "gemini" ? apiFormat : "openai";
+  return apiFormat === "gemini" || apiFormat === "sora" ? apiFormat : "openai";
 }
 
 function uniqueModelOptions(models: string[]) {

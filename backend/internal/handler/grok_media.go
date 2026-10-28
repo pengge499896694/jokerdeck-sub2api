@@ -51,8 +51,28 @@ func (h *OpenAIGatewayHandler) GrokVideoContent(c *gin.Context) {
 	h.handleGrokMedia(c, service.GrokMediaEndpointVideoContent, c.Param("request_id"))
 }
 
+// SoraVideo* relays the OpenAI-compatible /v1/videos protocol for regular
+// OpenAI-platform API-key accounts whose upstream provides Sora endpoints.
+func (h *OpenAIGatewayHandler) SoraVideoGeneration(c *gin.Context) {
+	c.Set("sora_video_platform", true)
+	h.handleGrokMedia(c, service.GrokMediaEndpointVideosGenerations, "")
+}
+
+func (h *OpenAIGatewayHandler) SoraVideoStatus(c *gin.Context) {
+	c.Set("sora_video_platform", true)
+	h.handleGrokMedia(c, service.GrokMediaEndpointVideoStatus, c.Param("request_id"))
+}
+
+func (h *OpenAIGatewayHandler) SoraVideoContent(c *gin.Context) {
+	c.Set("sora_video_platform", true)
+	h.handleGrokMedia(c, service.GrokMediaEndpointVideoContent, c.Param("request_id"))
+}
+
 func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.GrokMediaEndpoint, requestID string) {
 	platform := service.PlatformGrok
+	if sora, _ := c.Get("sora_video_platform"); sora == true {
+		platform = service.PlatformOpenAI
+	}
 	noAccountCode, noAccountMessage := "grok_media_no_eligible_account", "No eligible Grok media accounts"
 	if endpoint.IsSeedance() {
 		platform = service.PlatformOpenAI
@@ -127,7 +147,7 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 	setOpsRequestContext(c, requestModel, false)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeSync))
 
-	if endpoint.IsGenerationRequest() {
+	if isGrokMediaImageGenerationEndpoint(endpoint) {
 		if !service.GroupAllowsImageGeneration(apiKey.Group) {
 			h.errorResponse(c, http.StatusForbidden, "permission_error", service.ImageGenerationPermissionMessage())
 			return
@@ -223,6 +243,9 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 	}
 	routingStart := time.Now()
 	requiredCapability := grokMediaRequiredCapability(endpoint)
+	if platform == service.PlatformOpenAI {
+		requiredCapability = ""
+	}
 	var accountReleaseFunc func()
 	releaseAccount := func() {
 		if accountReleaseFunc != nil {
@@ -334,7 +357,7 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 		)
 
 		account := selection.Account
-		if endpoint.IsGenerationRequest() && !endpoint.IsSeedance() {
+		if endpoint.IsGenerationRequest() && !endpoint.IsSeedance() && platform == service.PlatformGrok {
 			eligible, eligibilityReason, eligibilityErr := h.ensureGrokMediaAccountEligibility(requestCtx, account)
 			if !eligible {
 				releaseAccount()
@@ -536,6 +559,10 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 		)
 		return
 	}
+}
+
+func isGrokMediaImageGenerationEndpoint(endpoint service.GrokMediaEndpoint) bool {
+	return endpoint == service.GrokMediaEndpointImagesGenerations || endpoint == service.GrokMediaEndpointImagesEdits
 }
 
 func (h *OpenAIGatewayHandler) ensureGrokMediaAccountEligibility(ctx context.Context, account *service.Account) (bool, string, error) {

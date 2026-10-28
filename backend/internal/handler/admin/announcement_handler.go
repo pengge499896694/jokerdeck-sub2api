@@ -56,7 +56,8 @@ func (h *AnnouncementHandler) SendEmail(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Subject string `json:"subject"`
+		Subject       string `json:"subject"`
+		BalanceGTZero bool   `json:"balance_gt_zero"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid email request")
@@ -84,7 +85,7 @@ func (h *AnnouncementHandler) SendEmail(c *gin.Context) {
 		}
 		for _, item := range items {
 			email := strings.ToLower(strings.TrimSpace(item.Email))
-			if item.Eligible && email != "" {
+			if announcementEmailRecipientEligible(item, req.BalanceGTZero) && email != "" {
 				recipients[email] = struct{}{}
 			}
 		}
@@ -120,6 +121,10 @@ func (h *AnnouncementHandler) SendEmail(c *gin.Context) {
 	close(jobs)
 	wg.Wait()
 	response.Success(c, gin.H{"total": len(recipients), "sent": sent, "failed": failed})
+}
+
+func announcementEmailRecipientEligible(item service.AnnouncementUserReadStatus, balanceGTZero bool) bool {
+	return item.Eligible && (!balanceGTZero || item.Balance > 0)
 }
 
 type CreateAnnouncementRequest struct {

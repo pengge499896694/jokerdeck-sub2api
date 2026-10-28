@@ -150,6 +150,7 @@ func TestSecurityHeaders(t *testing.T) {
 		assert.Contains(t, csp, "'nonce-")
 		assert.Contains(t, csp, CloudflareInsightsDomain)
 		assert.Equal(t, 1, countDirectiveValue(csp, "worker-src", TencentCaptchaWorkerSource))
+		assert.Equal(t, 1, countDirectiveValue(csp, "media-src", "blob:"))
 	})
 
 	t.Run("old_custom_policy_dynamically_allows_same_origin_frames", func(t *testing.T) {
@@ -391,6 +392,7 @@ func TestEnhanceCSPPolicy(t *testing.T) {
 		assert.Equal(t, 1, countDirectiveValue(enhanced, "frame-src", TencentCaptchaGlobalDomain))
 		assert.Equal(t, 1, countDirectiveValue(enhanced, "frame-src", TencentCaptchaPrehandleDomain))
 		assert.Equal(t, 1, countDirectiveValue(enhanced, "worker-src", TencentCaptchaWorkerSource))
+		assert.Equal(t, 1, countDirectiveValue(enhanced, "media-src", "blob:"))
 	})
 
 	t.Run("does_not_duplicate_tencent_captcha_worker_source", func(t *testing.T) {
@@ -398,6 +400,7 @@ func TestEnhanceCSPPolicy(t *testing.T) {
 		enhanced := enhanceCSPPolicy(policy)
 
 		assert.Equal(t, 1, countDirectiveValue(enhanced, "worker-src", TencentCaptchaWorkerSource))
+		assert.Equal(t, 1, countDirectiveValue(enhanced, "media-src", "blob:"))
 	})
 
 	t.Run("default_policy_already_carries_tencent_captcha_domains", func(t *testing.T) {

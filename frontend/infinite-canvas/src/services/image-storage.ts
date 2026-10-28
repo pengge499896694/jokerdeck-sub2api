@@ -2,7 +2,6 @@ import localforage from "localforage";
 
 import { nanoid } from "nanoid";
 import i18n from "@/i18n";
-import { withLocalProxy } from "@/stores/use-config-store";
 import { createImageThumbnail } from "@/lib/image-thumbnail";
 
 export type UploadedImage = {
@@ -79,7 +78,7 @@ async function fetchImageBlob(url: string, options?: ImageReadOptions) {
         controller.abort();
     }, IMAGE_DOWNLOAD_TIMEOUT_MS);
     try {
-        const response = await fetch(withLocalProxy(url), { signal: controller.signal });
+        const response = await fetch(url, { signal: controller.signal });
         if (!response.ok) throw namedError(IMAGE_RESPONSE_ERROR);
         return await response.blob();
     } catch (error) {
@@ -223,6 +222,10 @@ export async function setImageBlob(storageKey: string, blob: Blob) {
 }
 
 export async function imageToDataUrl(image: { url?: string; dataUrl?: string; storageKey?: string }, options?: ImageReadOptions) {
+    if (image.storageKey) {
+        const blob = await getImageBlob(image.storageKey);
+        if (blob) return blobToDataUrl(blob);
+    }
     const url = image.dataUrl || (await resolveImageUrl(image.storageKey, image.url || ""));
     if (!url || url.startsWith("data:")) return url;
     return blobToDataUrl(await fetchImageBlob(url, options));

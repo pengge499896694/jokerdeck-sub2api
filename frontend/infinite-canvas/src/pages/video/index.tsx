@@ -13,7 +13,7 @@ import { VideoSettingsPanel, normalizeVideoResolutionValue, normalizeVideoSizeVa
 import { canvasThemes } from "@/lib/canvas-theme";
 import { clampVideoSeconds } from "@/lib/media-size";
 import { formatBytes, formatDuration } from "@/lib/image-utils";
-import { deleteStoredMedia, resolveMediaUrl } from "@/services/file-storage";
+import { deleteStoredMedia, normalizeStoredVideo, refreshStoredVideoUrl, resolveMediaUrl } from "@/services/file-storage";
 import { resolveImageUrl, ensureImagePreview, getImagePreviewRevision, previewUrlFor, subscribeImagePreviews, uploadImage } from "@/services/image-storage";
 import { createVideoGenerationTask, pollVideoGenerationTask, storeGeneratedVideo, type VideoGenerationTask } from "@/services/api/video";
 import { useAssetStore } from "@/stores/use-asset-store";
@@ -37,6 +37,7 @@ type GeneratedVideo = {
 type GenerationResult = {
     id: string;
     status: "pending" | "success" | "failed";
+    progress?: number;
     video?: GeneratedVideo;
     error?: string;
 };
@@ -336,6 +337,7 @@ export default function VideoPage() {
                     return;
                 }
                 if (state.status === "failed") throw new Error(state.error);
+                setResults([{ id: log.id, status: "pending", progress: state.progress }]);
                 if (attempt === 119) throw new Error(t("videoWorkbench.timeout"));
                 await delay(2500);
             }
@@ -470,7 +472,7 @@ export default function VideoPage() {
                         </div>
                         {results.length ? (
                             <div className="grid gap-4">
-                                {results.map((result) => (result.status === "success" && result.video ? <ResultVideoCard key={result.id} video={result.video} onDownload={downloadVideo} onSaveAsset={saveResultToAssets} /> : result.status === "failed" ? <FailedVideoCard key={result.id} error={result.error || t("workbench.generationFailed")} onRetry={retryResult} /> : <PendingVideoCard key={result.id} />))}
+                                {results.map((result) => (result.status === "success" && result.video ? <ResultVideoCard key={result.id} video={result.video} onDownload={downloadVideo} onSaveAsset={saveResultToAssets} /> : result.status === "failed" ? <FailedVideoCard key={result.id} error={result.error || t("workbench.generationFailed")} onRetry={retryResult} /> : <PendingVideoCard key={result.id} progress={result.progress} />))}
                             </div>
                         ) : (
                             <div className="flex min-h-[320px] flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 text-center dark:border-stone-700 lg:min-h-[560px]">
@@ -528,9 +530,21 @@ function GenerationSettings({ config, model, updateConfig, openConfigDialog }: {
 
 function ResultVideoCard({ video, onDownload, onSaveAsset }: { video: GeneratedVideo; onDownload: (video: GeneratedVideo) => void; onSaveAsset: (video: GeneratedVideo) => void }) {
     const { t } = useTranslation();
+    const [source, setSource] = useState(video.url);
+    const retriedRef = useRef(false);
+    useEffect(() => {
+        setSource(video.url);
+        retriedRef.current = false;
+    }, [video.url]);
+    const retryPlayback = async () => {
+        if (retriedRef.current || !video.storageKey) return;
+        retriedRef.current = true;
+        const next = await refreshStoredVideoUrl(video.storageKey, video.url).catch(() => video.url);
+        if (next !== source) setSource(next);
+    };
     return (
         <div className="overflow-hidden rounded-lg border border-stone-200 bg-background dark:border-stone-800">
-            <video src={video.url} controls className="aspect-video w-full bg-black object-contain" />
+            <video src={source} controls preload="metadata" onError={() => void retryPlayback()} className="aspect-video w-full bg-black object-contain" />
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-stone-200 px-3 py-2.5 dark:border-stone-800">
                 <div className="flex min-w-0 flex-wrap gap-x-2 gap-y-1 text-xs text-stone-500 dark:text-stone-400">
                     <span>
@@ -552,13 +566,17 @@ function ResultVideoCard({ video, onDownload, onSaveAsset }: { video: GeneratedV
     );
 }
 
-function PendingVideoCard() {
+function PendingVideoCard({ progress }: { progress?: number }) {
     const { t } = useTranslation();
+    const value = typeof progress === "number" ? progress : undefined;
     return (
         <div className="relative aspect-video overflow-hidden rounded-lg border border-dashed border-stone-300 bg-stone-50 dark:border-stone-700 dark:bg-stone-900">
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-stone-500 dark:text-stone-400">
                 <LoaderCircle className="size-6 animate-spin" />
-                <span>{t("workbench.generating")}</span>
+                <span>{value === undefined ? t("workbench.generating") : `${t("workbench.generating")} ${value}%`}</span>
+                <div className="h-2 w-3/4 max-w-xs overflow-hidden rounded-full bg-stone-200 dark:bg-stone-800">
+                    <div className="h-full rounded-full bg-stone-700 transition-[width] duration-500 dark:bg-stone-200" style={{ width: `${value ?? 8}%` }} />
+                </div>
             </div>
         </div>
     );
@@ -672,7 +690,11 @@ async function readStoredLogs() {
 }
 
 async function normalizeLog(log: Partial<GenerationLog>): Promise<GenerationLog> {
-    const video = log.video?.storageKey ? { ...log.video, url: await resolveMediaUrl(log.video.storageKey, log.video.url) } : log.video;
+    let video = log.video;
+    if (video?.storageKey) {
+        await normalizeStoredVideo(video.storageKey).catch(() => undefined);
+        video = { ...video, mimeType: "video/mp4", url: await resolveMediaUrl(video.storageKey, video.url) };
+    }
     const references = await Promise.all(
         (log.references || []).map(async (item) => {
             void ensureImagePreview(item.storageKey);

@@ -11,7 +11,7 @@ import { runModelPlugin } from "./model-plugin";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 
-type VideoResponse = { id: string; status?: string; error?: { message?: string }; url?: string; result_url?: string; video_url?: string; content?: { video_url?: string; url?: string } | null };
+type VideoResponse = { id?: string; task_id?: string; status?: string; progress?: number; error?: { message?: string }; url?: string; result_url?: string; video_url?: string; content?: { video_url?: string; url?: string } | null };
 type ApiVideoResponse = VideoResponse | { code?: number | string; data?: VideoResponse | null; msg?: string; message?: string; error?: { message?: string } };
 type ApiEnvelope<T> = T | { code?: number | string; data?: T | null; msg?: string; message?: string; error?: { message?: string } };
 type RequestOptions = { signal?: AbortSignal };
@@ -19,7 +19,7 @@ type VideoMediaOptions = RequestOptions & { videos?: ReferenceVideo[]; audios?: 
 const apiText = (key: string, options?: Record<string, unknown>) => i18n.t(`apiErrors.${key}`, options);
 
 export type VideoGenerationResult = { blob?: Blob; url?: string; mimeType?: string };
-export type VideoGenerationTask = { id: string; provider: "openai" | "gemini" | "plugin"; model: string };
+export type VideoGenerationTask = { id: string; provider: "openai" | "gemini" | "sora" | "plugin"; model: string };
 type GeminiInlineData = { bytesBase64Encoded: string; mimeType: string };
 type GeminiVideoOperation = {
     name?: string;
@@ -27,7 +27,7 @@ type GeminiVideoOperation = {
     error?: { message?: string };
     response?: { generateVideoResponse?: { generatedSamples?: Array<{ video?: { uri?: string } }> } };
 };
-export type VideoGenerationTaskState = { status: "pending" } | { status: "completed"; result: VideoGenerationResult } | { status: "failed"; error: string };
+export type VideoGenerationTaskState = { status: "pending"; progress?: number } | { status: "completed"; result: VideoGenerationResult } | { status: "failed"; error: string };
 
 /** Results for scripted (plugin) video models, which run their own create+poll in one shot at task creation. */
 const pluginVideoResults = new Map<string, VideoGenerationResult>();
@@ -76,6 +76,7 @@ export async function createVideoGenerationTask(config: AiConfig, prompt: string
     if (script) return createPluginVideoTask(requestConfig, selectedModel, script, prompt, references, options);
     assertVideoConfig(requestConfig, requestConfig.model);
     if (requestConfig.apiFormat === "gemini") return createGeminiVideoTask(requestConfig, selectedModel, prompt, references, options);
+    if (requestConfig.apiFormat === "sora") return createSoraVideoTask(requestConfig, selectedModel, prompt, references, options);
     return createOpenAIVideoTask(requestConfig, selectedModel, prompt, references, options);
 }
 
@@ -87,6 +88,7 @@ export async function pollVideoGenerationTask(config: AiConfig, task: VideoGener
     const requestConfig = resolveModelRequestConfig(config, task.model);
     assertVideoConfig(requestConfig, requestConfig.model);
     if (task.provider === "gemini") return pollGeminiVideoTask(requestConfig, task, options);
+    if (task.provider === "sora") return pollSoraVideoTask(requestConfig, task, options);
     return pollOpenAIVideoTask(requestConfig, task, options);
 }
 
@@ -190,6 +192,49 @@ async function createOpenAIVideoTask(config: AiConfig, model: string, prompt: st
     }
 }
 
+async function createSoraVideoTask(config: AiConfig, model: string, prompt: string, references: ReferenceImage[], options?: VideoMediaOptions): Promise<VideoGenerationTask> {
+    const imageUrls = references
+        .map((image) => image.url || image.dataUrl)
+        .filter((url): url is string => /^https?:\/\//i.test(url));
+    if (references.length > imageUrls.length) {
+        throw new Error("云影图生视频要求公网图片地址，当前素材是浏览器本地图片。请先使用公网图片 URL，或先配置服务器图片存储。");
+    }
+    const body: Record<string, unknown> = {
+        model: modelOptionName(model),
+        prompt,
+        duration: Number(normalizeVideoSeconds(config.videoSeconds)) || 6,
+        aspect_ratio: videoAspectRatio(config.size),
+        resolution: normalizeVideoResolution(config.vquality),
+        generate_audio: boolConfig(config.videoGenerateAudio, true),
+    };
+    if (imageUrls.length) body.image_urls = imageUrls;
+    try {
+        const created = unwrapVideoResponse((await axios.post<ApiVideoResponse>(aiApiUrl(config, "/videos"), body, { headers: aiHeaders(config, "application/json"), signal: options?.signal })).data);
+        const taskId = created.task_id || created.id;
+        if (!taskId) throw new Error(apiText("noVideoTaskId"));
+        return { id: taskId, provider: "sora", model };
+    } catch (error) {
+        throw new Error(readAxiosError(error, apiText("videoTaskCreateFailed")));
+    }
+}
+
+async function pollSoraVideoTask(config: AiConfig, task: VideoGenerationTask, options?: RequestOptions): Promise<VideoGenerationTaskState> {
+    try {
+        const video = unwrapVideoResponse((await axios.get<ApiVideoResponse>(aiApiUrl(config, `/videos/${task.id}`), { headers: aiHeaders(config), signal: options?.signal })).data);
+        const url = videoResultUrl(video);
+        if (url) return { status: "completed", result: await videoResultFromUrl(url, options) };
+        if (video.status === "completed") {
+            const content = await axios.get<Blob>(aiApiUrl(config, `/videos/${task.id}/content`), { headers: aiHeaders(config), responseType: "blob", signal: options?.signal });
+            await assertVideoBlob(content.data);
+            return { status: "completed", result: { blob: normalizeVideoBlob(content.data) } };
+        }
+        if (video.status === "failed" || video.status === "cancelled") return { status: "failed", error: readApiErrorMessage(video.error?.message) || apiText("videoGenerationFailed") };
+        return { status: "pending", progress: normalizeVideoProgress(video.progress) };
+    } catch (error) {
+        throw new Error(readAxiosError(error, apiText("videoTaskQueryFailed")));
+    }
+}
+
 async function pollOpenAIVideoTask(config: AiConfig, task: VideoGenerationTask, options?: RequestOptions): Promise<VideoGenerationTaskState> {
     try {
         const video = unwrapVideoResponse((await axios.get<ApiVideoResponse>(aiApiUrl(config, `/videos/${task.id}`), { headers: aiHeaders(config), signal: options?.signal })).data);
@@ -198,10 +243,10 @@ async function pollOpenAIVideoTask(config: AiConfig, task: VideoGenerationTask, 
         if (video.status === "completed") {
             const content = await axios.get<Blob>(aiApiUrl(config, `/videos/${task.id}/content`), { headers: aiHeaders(config), responseType: "blob", signal: options?.signal });
             await assertVideoBlob(content.data);
-            return { status: "completed", result: { blob: content.data } };
+            return { status: "completed", result: { blob: normalizeVideoBlob(content.data) } };
         }
         if (video.status === "failed" || video.status === "cancelled") return { status: "failed", error: readApiErrorMessage(video.error?.message) || apiText("videoGenerationFailed") };
-        return { status: "pending" };
+        return { status: "pending", progress: normalizeVideoProgress(video.progress) };
     } catch (error) {
         throw new Error(readAxiosError(error, apiText("videoTaskQueryFailed")));
     }
@@ -211,11 +256,19 @@ async function videoResultFromUrl(url: string, options?: RequestOptions): Promis
     try {
         const response = await axios.get<Blob>(withLocalProxy(url), { responseType: "blob", signal: options?.signal });
         await assertVideoBlob(response.data);
-        return { blob: response.data };
+        return { blob: normalizeVideoBlob(response.data) };
     } catch (error) {
         if (axios.isCancel(error) || options?.signal?.aborted) throw error;
         return { url, mimeType: "video/mp4" };
     }
+}
+
+function normalizeVideoProgress(value?: number) {
+    return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.min(99, Math.round(value))) : undefined;
+}
+
+function normalizeVideoBlob(blob: Blob) {
+    return blob.type.startsWith("video/") ? blob : blob.slice(0, blob.size, "video/mp4");
 }
 
 async function createGeminiVideoTask(config: AiConfig, model: string, prompt: string, references: ReferenceImage[], options?: VideoMediaOptions): Promise<VideoGenerationTask> {

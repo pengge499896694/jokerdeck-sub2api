@@ -169,9 +169,15 @@ export function buildNodeResponseMessages(context: NodeGenerationContext): AiTex
     ];
 }
 
-export async function hydrateNodeGenerationContext(context: NodeGenerationContext) {
+export async function hydrateNodeGenerationContext(context: NodeGenerationContext, signal?: AbortSignal) {
     const { imageToDataUrl } = await import("@/services/image-storage");
-    return { ...context, referenceImages: await Promise.all(context.referenceImages.map(async (image) => ({ ...image, dataUrl: await imageToDataUrl(image) }))) };
+    const referenceImages = await Promise.all(context.referenceImages.map(async (image) => {
+        return {
+            ...image,
+            dataUrl: await imageToDataUrl(image.storageKey ? { storageKey: image.storageKey, url: image.dataUrl } : image, { signal }),
+        };
+    }));
+    return { ...context, referenceImages, imageCount: referenceImages.length };
 }
 
 function readNodeTextInput(node: CanvasNodeData) {
