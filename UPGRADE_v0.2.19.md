@@ -10,7 +10,8 @@
 
 - 当前容器：`sub2api-v0219-20261028`，healthy，零重启。
 - 当前镜像：`local/sub2api:v0.2.19-jokerdeck-20261028`。
-- 原容器：`sub2api-canvas-video-history-fix-20261028`，保持运行并健康。
+- 原容器：`sub2api-canvas-video-history-fix-20261028`，验收后已停止，
+  重启策略设为 `no`；容器与镜像保留供回滚。
 - 完整备份：服务器 `/opt/sub2api/backups/pre-v0219-20261028/`。
 - 回滚入口：服务器 `python3 /opt/sub2api/staging/v0219-20261028/rollback.py`。
 
@@ -90,5 +91,6 @@ SHA256：`dc883ece21b0ace8d0e28bcff31899d3c2f3f6902293f84183c2cc2d6399daf4`。
    旧应用保持运行，等待旧 worker/长连接排空且验收完成后再收尾。
    发生异常立即恢复 upstream 并 reload。
 
-上述发布步骤和线上验收已完成。旧容器继续运行，便于立即回滚；
+上述发布步骤和线上验收已完成。确认 Nginx 全部指向新版本、旧 worker 已排空后，
+旧容器已使用 120 秒优雅停止超时停用，避免重复后台任务消耗 CPU。回滚脚本会先启动旧容器再切流；
 本次迁移仅新增列，回滚应用时保留数据库迁移，不回放旧数据库覆盖新业务数据。
