@@ -985,6 +985,26 @@ func (s *OpenAIGatewayService) handleOpenAIImagesNonStreamingResponse(
 		return OpenAIUsage{}, 0, nil, err
 	}
 	body = s.backfillOpenAIImagesB64JSON(ctx, account, parsed, body)
+	imageCount := extractOpenAIImageCountFromJSONBytes(body)
+	if imageCount == 0 {
+		// HTTP 200 is not proof that generation succeeded. Some compatible
+		// upstreams return an error envelope or an empty data array with 200.
+		// Reject it before committing a success or returning billable units.
+		if errorObj := gjson.GetBytes(body, "error"); errorObj.Exists() && errorObj.Type != gjson.Null {
+			upstreamErr := openAIImagesUpstreamErrorFromGJSON(errorObj, resp.Header.Get("x-request-id"))
+			setOpsUpstreamError(c, upstreamErr.clientStatusCode(), upstreamErr.clientMessage(), "")
+			if !IsOpenAIImagesRetryableUpstreamError(upstreamErr) {
+				writeOpenAIImagesUpstreamErrorResponse(c, upstreamErr)
+				return OpenAIUsage{}, 0, nil, upstreamErr
+			}
+		}
+		setOpsUpstreamError(c, http.StatusBadGateway, "upstream did not return image output", summarizeOpenAIImagesNoOutputBody(body))
+		return OpenAIUsage{}, 0, nil, &UpstreamFailoverError{
+			StatusCode:      http.StatusBadGateway,
+			ResponseBody:    body,
+			ResponseHeaders: resp.Header.Clone(),
+		}
+	}
 	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 	contentType := "application/json"
 	if s.cfg != nil && !s.cfg.Security.ResponseHeaders.Enabled {
@@ -995,7 +1015,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesNonStreamingResponse(
 	c.Data(resp.StatusCode, contentType, body)
 
 	usage, _ := extractOpenAIUsageFromJSONBytes(body)
-	return usage, extractOpenAIImageCountFromJSONBytes(body), collectOpenAIResponseImageOutputSizesFromJSONBytes(body), nil
+	return usage, imageCount, collectOpenAIResponseImageOutputSizesFromJSONBytes(body), nil
 }
 
 func (s *OpenAIGatewayService) handleOpenAIImagesStreamingResponse(
@@ -1030,13 +1050,10 @@ func (s *OpenAIGatewayService) handleOpenAIImagesStreamingResponse(
 	var sseData openAISSEDataAccumulator
 	var streamErr error
 	finish := func() error {
-		if direct == nil {
-			return nil
-		}
 		if streamErr != nil {
 			return streamErr
 		}
-		if !seenSSEData || imageCounter.Count() == 0 {
+		if imageCounter.Count() == 0 || (direct != nil && !seenSSEData) {
 			return newOpenAIUpstreamStreamReadError(ErrOpenAIUpstreamStreamTruncated)
 		}
 		return nil
@@ -1056,7 +1073,20 @@ func (s *OpenAIGatewayService) handleOpenAIImagesStreamingResponse(
 		}
 		mergeOpenAIUsage(&usage, dataBytes)
 		imageCounter.AddSSEData(dataBytes)
-		if direct == nil || string(dataBytes) == "[DONE]" {
+		if string(dataBytes) == "[DONE]" {
+			return
+		}
+		if direct == nil {
+			// Passthrough streams still need a failure verdict for billing. A
+			// usage-only stream or response.failed must not become one paid image.
+			if upstreamErr := openAIImagesUpstreamErrorFromSSEPayload(dataBytes); upstreamErr != nil {
+				streamErr = upstreamErr
+			}
+			if streamErr == nil {
+				if errorObj := gjson.GetBytes(dataBytes, "error"); errorObj.Exists() && errorObj.Type != gjson.Null {
+					streamErr = openAIImagesUpstreamErrorFromGJSON(errorObj, resp.Header.Get("x-request-id"))
+				}
+			}
 			return
 		}
 		if directUsage, ok := codexDirectImagesUsage(dataBytes); ok {

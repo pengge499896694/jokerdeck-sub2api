@@ -53,6 +53,22 @@ func TestIsGrokVideoStatusBillable(t *testing.T) {
 	require.True(t, IsGrokVideoStatusBillable([]byte(`{"status":"completed","video_url":"https://media.yyapi.cloud/public/videos/task/content"}`)))
 }
 
+func TestFailedVideoStatusesNeverProduceBillingUnits(t *testing.T) {
+	pending := &GrokVideoPendingBilling{Model: "grok-imagine-video", VideoResolution: "720p", VideoDurationSeconds: 8}
+	for _, status := range []string{"pending", "queued", "in_progress", "failed", "expired", "cancelled", "canceled"} {
+		t.Run(status, func(t *testing.T) {
+			// Failed upstreams sometimes retain an old URL or requested duration.
+			// Neither is sufficient evidence of a successfully generated video.
+			body := []byte(`{"status":"` + status + `","video":{"url":"https://example.com/previous.mp4","duration":8},"usage":{"total_tokens":0}}`)
+			require.False(t, IsGrokVideoStatusBillable(body))
+			require.Nil(t, ExtractGrokVideoBillingFromStatusBody(body, pending, "failed-task"))
+			meta := grokMediaUsageFromResponse(GrokMediaEndpointVideoStatus, GrokMediaRequestInfo{}, body)
+			require.Zero(t, meta.VideoCount)
+			require.Zero(t, meta.ImageCount)
+		})
+	}
+}
+
 func TestExtractGrokVideoBillingFromStatusBodyPrefersUpstreamParams(t *testing.T) {
 	t.Parallel()
 	pending := &GrokVideoPendingBilling{

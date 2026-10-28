@@ -11,10 +11,10 @@ func TestResolveBillableImageCount(t *testing.T) {
 		want          int
 	}{
 		{name: "实际返回多张", reported: 3, requested: 5, want: 3},
-		{name: "开关开启兜底一张", reported: 0, requested: 3, fallbackToOne: true, want: 1},
-		{name: "开关关闭保留请求 n", reported: 0, requested: 3, want: 3},
+		{name: "开关开启无图不计费", reported: 0, requested: 3, fallbackToOne: true, want: 0},
+		{name: "开关关闭无图不计费", reported: 0, requested: 3, want: 0},
 		{name: "流式开关关闭保持 0", reported: 0, requested: 0, want: 0},
-		{name: "非法负数开关关闭保持 n", reported: -1, requested: 2, want: 2},
+		{name: "非法负数不得推定成功", reported: -1, requested: 2, want: 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
