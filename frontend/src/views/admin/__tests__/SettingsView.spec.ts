@@ -119,6 +119,14 @@ vi.mock("@/api", () => ({
   },
 }));
 
+vi.mock("@/api/commerceLinks", () => ({
+  getCommerceLinks: vi.fn().mockResolvedValue({
+    xianyu_order_url: "https://m.tb.cn/example",
+    store_url: "https://store.example/shop",
+    store_backup_url: "",
+  }),
+}));
+
 vi.mock("@/stores", () => ({
   useAppStore: () => ({
     showError,

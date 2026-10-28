@@ -6351,6 +6351,7 @@
 
         <!-- Tab: General -->
         <div v-show="activeTab === 'general'" class="space-y-6">
+          <CommerceLinksSettings />
           <!-- Site Settings -->
           <div class="card">
             <div
@@ -8980,6 +8981,7 @@ import type { ProviderInstance } from "@/types/payment";
 import AppLayout from "@/components/layout/AppLayout.vue";
 import ClientNodesPanel from "./settings/ClientNodesPanel.vue";
 import ClientProviderPolicy from "@/components/admin/ClientProviderPolicy.vue";
+import CommerceLinksSettings from "@/components/admin/CommerceLinksSettings.vue";
 import Icon from "@/components/icons/Icon.vue";
 import Select, { type SelectOption } from "@/components/common/Select.vue";
 import {

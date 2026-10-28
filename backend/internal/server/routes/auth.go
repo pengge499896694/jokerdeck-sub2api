@@ -256,6 +256,7 @@ func RegisterAuthRoutes(
 	authenticated.Use(panelRateLimiter.Global())
 	{
 		authenticated.GET("/client/node-policy", h.Setting.GetClientNodePolicy)
+		authenticated.GET("/commerce-links", h.Setting.GetCommerceLinks)
 		authenticated.GET("/client/node-subscription", h.Setting.GetClientNodeSubscription)
 		authenticated.GET("/auth/me", h.Auth.GetCurrentUser)
 		// 撤销所有会话（需要认证）

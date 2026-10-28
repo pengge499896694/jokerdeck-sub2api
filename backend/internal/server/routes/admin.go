@@ -594,6 +594,8 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpA
 		adminSettings.GET("/client-nodes", h.Admin.Setting.ListClientNodes)
 		adminSettings.POST("/client-nodes/test", h.Admin.Setting.TestClientNodes)
 		adminSettings.GET("/client-provider-policy", h.Admin.Setting.GetClientProviderPolicy)
+		adminSettings.GET("/commerce-links", h.Admin.Setting.GetCommerceLinks)
+		adminSettings.PUT("/commerce-links", h.Admin.Setting.UpdateCommerceLinks)
 		adminSettings.PUT("/client-provider-policy", h.Admin.Setting.UpdateClientProviderPolicy)
 		adminSettings.POST("/test-smtp", h.Admin.Setting.TestSMTPConnection)
 		adminSettings.POST("/send-test-email", h.Admin.Setting.SendTestEmail)

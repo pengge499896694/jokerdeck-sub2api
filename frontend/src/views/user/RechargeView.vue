@@ -15,7 +15,9 @@
               </p>
             </div>
           </div>
+          <div class="flex flex-col gap-2">
           <a
+            v-if="xianyuLink"
             :href="xianyuLink"
             target="_blank"
             rel="noopener noreferrer"
@@ -24,6 +26,9 @@
             <Icon name="externalLink" size="md" class="mr-2" />
             前往闲鱼下单
           </a>
+          <button type="button" class="btn btn-secondary" :disabled="linkLoading" @click="loadPurchaseLink">{{ linkLoading ? '读取中...' : '更新下单链接' }}</button>
+          <p v-if="linkError" role="alert" class="text-sm text-red-600">{{ linkError }}</p>
+          </div>
         </div>
         <div class="grid border-t border-gray-100 bg-gray-50/70 sm:grid-cols-2 dark:border-dark-700 dark:bg-dark-800/50">
           <div class="px-5 py-3 text-sm text-gray-600 dark:text-gray-300">
@@ -151,6 +156,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import RechargeTermsGate from '@/components/user/RechargeTermsGate.vue'
 import { useAppStore } from '@/stores/app'
+import { getCommerceLinks } from '@/api/commerceLinks'
 import { formatDateTime } from '@/utils/format'
 import {
   xianyuRechargeAPI,
@@ -158,7 +164,16 @@ import {
   type XianyuRechargeStatus
 } from '@/api/xianyuRecharge'
 
-const xianyuLink = 'https://m.tb.cn/h.8orR1uB?tk=qgivTTR6A22'
+const xianyuLink = ref('')
+const linkLoading = ref(false)
+const linkError = ref('')
+async function loadPurchaseLink() {
+  if (linkLoading.value) return
+  linkLoading.value = true; linkError.value = ''
+  try { xianyuLink.value = (await getCommerceLinks()).xianyu_order_url }
+  catch { xianyuLink.value = ''; linkError.value = '下单链接读取失败，请更新链接后重试。' }
+  finally { linkLoading.value = false }
+}
 const appStore = useAppStore()
 const orders = ref<XianyuRechargeOrder[]>([])
 const loading = ref(false)
@@ -226,5 +241,5 @@ async function submitOrder() {
   }
 }
 
-onMounted(loadOrders)
+onMounted(() => { void loadOrders(); void loadPurchaseLink() })
 </script>
