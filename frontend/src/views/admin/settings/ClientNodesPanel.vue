@@ -3,7 +3,7 @@
     <div class="border-b border-gray-200 pb-4 dark:border-dark-700">
       <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ text('客户端节点', 'Client nodes') }}</h2>
       <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-        {{ text('主订阅优先，不可用时自动切到备用订阅。客户端按实际代理延迟自动选节点；此页测试的是节点入口的 TCP 延迟。', 'Primary nodes are preferred, with automatic backup failover. Clients test actual proxy latency; this panel measures TCP latency to node endpoints.') }}
+        {{ text('上传的 YAML 会作为主订阅；原订阅地址保留为备用并自动故障切换。客户端按实际代理延迟自动选节点；此页测试的是节点入口的 TCP 延迟。', 'An uploaded YAML file becomes the primary source; configured URLs remain as automatic fallbacks. Clients test actual proxy latency; this panel measures TCP latency to node endpoints.') }}
       </p>
     </div>
 
@@ -21,12 +21,19 @@
 
     <div class="space-y-3">
       <div>
-        <label for="client-subscription" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{{ text('主订阅地址', 'Primary subscription URL') }}</label>
+        <label for="client-subscription" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{{ hasUploadedYAML ? text('备用订阅地址（上传 YAML 后）', 'Fallback subscription URL after YAML upload') : text('主订阅地址', 'Primary subscription URL') }}</label>
         <input id="client-subscription" v-model.trim="policy.subscription_url" type="url" class="input w-full" :disabled="loading" />
       </div>
       <div>
         <label for="client-backup-subscriptions" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{{ text('备用订阅地址', 'Backup subscription URLs') }}</label>
         <textarea id="client-backup-subscriptions" v-model="backupSubscriptionText" rows="3" class="input w-full font-mono text-sm" :disabled="loading" :placeholder="text('每行一个 HTTPS 地址', 'One HTTPS URL per line')" />
+      </div>
+      <div class="flex flex-wrap items-end gap-3">
+        <label for="client-node-yaml-upload" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          <span class="mb-1 block">{{ text('上传 YAML 节点配置', 'Upload YAML node configuration') }}</span>
+          <input id="client-node-yaml-upload" type="file" accept=".yaml,.yml,application/yaml,text/yaml" class="block max-w-full text-sm text-gray-700 file:mr-3 file:rounded file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-sm dark:text-gray-300 dark:file:bg-dark-700" :disabled="loading" @change="uploadYAML" />
+        </label>
+        <button v-if="hasUploadedYAML" type="button" class="btn btn-secondary btn-sm" :disabled="loading" @click="removeUploadedYAML">{{ text('移除已上传 YAML', 'Remove uploaded YAML') }}</button>
       </div>
       <div class="flex justify-end">
         <button type="button" class="btn btn-primary btn-sm" :disabled="loading" @click="savePolicy">{{ text('保存配置', 'Save settings') }}</button>
@@ -89,6 +96,7 @@ const policy = reactive({ enabled: true, subscription_url: '', backup_subscripti
 const backupSubscriptionText = ref('')
 
 const totalNodes = computed(() => subscriptions.value.reduce((total, group) => total + group.nodes.length, 0))
+const hasUploadedYAML = computed(() => subscriptions.value.some(group => group.id === 'uploaded-yaml'))
 const fastestLatency = computed(() => {
   const values = subscriptions.value.flatMap(group => group.nodes.map(node => node.latency_ms).filter((value): value is number => typeof value === 'number' && value > 0))
   return values.length ? Math.min(...values) : null
@@ -116,6 +124,26 @@ async function reload() {
 
 async function refreshNodes() {
   await run(async () => { subscriptions.value = await adminAPI.clientNodes.listNodes() })
+}
+
+async function uploadYAML(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  await run(async () => {
+    await adminAPI.clientNodes.uploadYAML(file)
+    subscriptions.value = await adminAPI.clientNodes.listNodes()
+    message.value = text('YAML 配置已上传并设为主订阅', 'YAML configuration uploaded as the primary source')
+  })
+  input.value = ''
+}
+
+async function removeUploadedYAML() {
+  await run(async () => {
+    await adminAPI.clientNodes.removeUploadedYAML()
+    subscriptions.value = await adminAPI.clientNodes.listNodes()
+    message.value = text('已移除上传的 YAML 配置', 'Uploaded YAML configuration removed')
+  })
 }
 
 async function savePolicy() {

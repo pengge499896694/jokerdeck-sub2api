@@ -41,9 +41,22 @@ export async function listNodes(): Promise<ClientNodeSubscription[]> {
   return data
 }
 
+export async function uploadYAML(file: File): Promise<void> {
+  const form = new FormData()
+  form.append('file', file)
+  await apiClient.post('/admin/settings/client-nodes/upload', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 30000,
+  })
+}
+
+export async function removeUploadedYAML(): Promise<void> {
+  await apiClient.delete('/admin/settings/client-nodes/upload')
+}
+
 export async function testNodes(names: string[] = [], subscriptionID = ''): Promise<Array<{ subscription_id: string; name: string; success: boolean; latency_ms?: number; message?: string }>> {
   const { data } = await apiClient.post('/admin/settings/client-nodes/test', { names, subscription_id: subscriptionID })
   return data
 }
 
-export default { getPolicy, updatePolicy, listNodes, testNodes }
+export default { getPolicy, updatePolicy, listNodes, uploadYAML, removeUploadedYAML, testNodes }

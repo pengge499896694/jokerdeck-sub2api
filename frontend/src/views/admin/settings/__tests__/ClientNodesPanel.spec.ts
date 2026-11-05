@@ -6,12 +6,14 @@ const getPolicy = vi.hoisted(() => vi.fn())
 const updatePolicy = vi.hoisted(() => vi.fn())
 const listNodes = vi.hoisted(() => vi.fn())
 const testNodes = vi.hoisted(() => vi.fn())
+const uploadYAML = vi.hoisted(() => vi.fn())
+const removeUploadedYAML = vi.hoisted(() => vi.fn())
 
-vi.mock('@/api', () => ({ adminAPI: { clientNodes: { getPolicy, updatePolicy, listNodes, testNodes } } }))
+vi.mock('@/api', () => ({ adminAPI: { clientNodes: { getPolicy, updatePolicy, listNodes, testNodes, uploadYAML, removeUploadedYAML } } }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ locale: { value: 'zh-CN' } }) }))
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
   getPolicy.mockResolvedValue({ enabled: true, subscription_url: 'https://example.com/primary', backup_subscription_urls: ['https://example.com/backup'], disabled_nodes: [] })
   listNodes.mockResolvedValue([
     { id: 'primary', name: '主订阅', primary: true, available: false, error: '订阅读取失败或没有可用节点', nodes: [] },
@@ -19,6 +21,8 @@ beforeEach(() => {
   ])
   updatePolicy.mockImplementation(async policy => policy)
   testNodes.mockResolvedValue([{ subscription_id: 'backup-1', name: 'SG-Backup', success: true, latency_ms: 27 }])
+  uploadYAML.mockResolvedValue(undefined)
+  removeUploadedYAML.mockResolvedValue(undefined)
 })
 
 describe('ClientNodesPanel', () => {
@@ -62,6 +66,39 @@ describe('ClientNodesPanel', () => {
     }))
     expect(wrapper.get('#client-backup-subscriptions').element.value).toBe('https://example.com/backup-1\nhttps://example.com/backup-2')
     expect(wrapper.text()).toContain('配置已保存')
+  })
+
+  it('uploads a YAML file and refreshes the node tree', async () => {
+    const wrapper = mount(ClientNodesPanel)
+    await flushPromises()
+    const file = new File(['proxies:\n  - name: Local-Node\n    type: ss\n'], 'nodes.yaml', { type: 'application/yaml' })
+    listNodes.mockResolvedValueOnce([
+      { id: 'uploaded-yaml', name: '已上传 YAML', primary: true, available: true, nodes: [{ name: 'Local-Node', type: 'ss', enabled: true }] },
+    ])
+    const input = wrapper.get('#client-node-yaml-upload')
+    Object.defineProperty(input.element, 'files', { configurable: true, value: [file] })
+    await input.trigger('change')
+    await flushPromises()
+    expect(uploadYAML).toHaveBeenCalledWith(file)
+    expect(wrapper.text()).toContain('Local-Node')
+    expect(wrapper.text()).toContain('YAML 配置已上传并设为主订阅')
+    expect(wrapper.text()).toContain('主订阅')
+    expect(wrapper.text()).toContain('移除已上传 YAML')
+  })
+
+  it('removes an uploaded YAML source', async () => {
+    listNodes.mockResolvedValueOnce([
+      { id: 'uploaded-yaml', name: '已上传 YAML', primary: true, available: true, nodes: [{ name: 'Local-Node', type: 'ss', enabled: true }] },
+    ]).mockResolvedValueOnce([])
+    const wrapper = mount(ClientNodesPanel)
+    await flushPromises()
+    const removeButton = wrapper.findAll('button').find(button => button.text().includes('移除已上传 YAML'))
+    expect(removeButton).toBeDefined()
+    await removeButton!.trigger('click')
+    await flushPromises()
+    expect(removeUploadedYAML).toHaveBeenCalledOnce()
+    expect(wrapper.text()).toContain('已移除上传的 YAML 配置')
+    expect(wrapper.text()).not.toContain('移除已上传 YAML')
   })
 
   it('displays the API error message instead of an object when saving fails', async () => {

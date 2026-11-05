@@ -30,6 +30,12 @@ export interface FinanceBalanceHistoryPage {
   total_recharged: number
 }
 
+export interface FinanceAPIKey {
+  id: number
+  name: string
+  status: string
+}
+
 export interface FinanceGroup {
   id: number
   name: string
@@ -55,6 +61,8 @@ export interface FinanceRecharge {
 export interface FinanceUsage {
   id: number
   user_id: number
+  api_key_id: number
+  api_key_name: string
   email: string
   username: string
   group_name: string
@@ -80,7 +88,10 @@ export interface FinancePage<T> {
 export interface FinanceFilters {
   start_month?: string
   end_month?: string
+  start_date?: string
+  end_date?: string
   user_id?: number
+  api_key_id?: number
   group_id?: number
   search?: string
   page?: number
@@ -90,6 +101,8 @@ export interface FinanceFilters {
 const financeAPI = {
   users: (search?: string) =>
     apiClient.get<{ items: FinanceUser[] }>('/finance/users', { params: { search } }).then((r) => r.data),
+  apiKeys: (userId: number) =>
+    apiClient.get<{ items: FinanceAPIKey[] }>(`/finance/users/${userId}/api-keys`).then((r) => r.data),
   balances: (params: FinanceFilters) =>
     apiClient.get<Pick<FinancePage<FinanceUser>, 'items' | 'total' | 'page' | 'page_size' | 'pages'>>('/finance/balances', { params }).then((r) => r.data),
   balanceHistory: (id: number, params: { page?: number; page_size?: number; type?: string } = {}) =>

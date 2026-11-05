@@ -19,6 +19,7 @@ func RegisterFinanceRoutes(
 	finance.Use(gin.HandlerFunc(auditLog))
 	{
 		finance.GET("/users", h.Finance.Users)
+		finance.GET("/users/:id/api-keys", h.Finance.APIKeys)
 		finance.GET("/balances", h.Finance.Balances)
 		finance.GET("/users/:id/balance-history", h.Finance.BalanceHistory)
 		finance.GET("/groups", h.Finance.Groups)

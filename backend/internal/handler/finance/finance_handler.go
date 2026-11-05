@@ -110,6 +110,19 @@ func (h *Handler) Users(c *gin.Context) {
 	response.Success(c, gin.H{"items": items})
 }
 
+func (h *Handler) APIKeys(c *gin.Context) {
+	userID, ok := parsePositiveID(c)
+	if !ok {
+		return
+	}
+	items, err := h.service.ListAPIKeysByUserID(c.Request.Context(), userID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"items": items})
+}
+
 func (h *Handler) Groups(c *gin.Context) {
 	items, err := h.service.ListGroups(c.Request.Context())
 	if err != nil {
@@ -307,11 +320,11 @@ func (h *Handler) Export(c *gin.Context) {
 	_, _ = c.Writer.Write([]byte{0xEF, 0xBB, 0xBF})
 	writer := csv.NewWriter(c.Writer)
 	if kind == "usage" {
-		_ = writer.Write([]string{"记录ID", "用户ID", "邮箱", "用户名", "财务分组", "模型", "请求ID", "输入Token", "输出Token", "总Token", "实际费用USD", "时间"})
+		_ = writer.Write([]string{"记录ID", "用户ID", "邮箱", "用户名", "API Key ID", "API Key", "财务分组", "模型", "请求ID", "输入Token", "输出Token", "总Token", "实际费用USD", "时间"})
 		for _, item := range usageRows {
 			_ = writer.Write([]string{
 				strconv.FormatInt(item.ID, 10), strconv.FormatInt(item.UserID, 10), safeCSVText(item.Email), safeCSVText(item.Username),
-				safeCSVText(item.GroupName), safeCSVText(item.Model), safeCSVText(item.RequestID), strconv.Itoa(item.InputTokens), strconv.Itoa(item.OutputTokens),
+				strconv.FormatInt(item.APIKeyID, 10), safeCSVText(item.APIKeyName), safeCSVText(item.GroupName), safeCSVText(item.Model), safeCSVText(item.RequestID), strconv.Itoa(item.InputTokens), strconv.Itoa(item.OutputTokens),
 				strconv.Itoa(item.TotalTokens), formatMoney(item.ActualCost), item.CreatedAt.Format(time.RFC3339),
 			})
 		}
@@ -349,9 +362,21 @@ func parseFinanceFilters(c *gin.Context) (service.FinanceFilters, error) {
 		}
 		f.GroupID = id
 	}
+	if raw := strings.TrimSpace(c.Query("api_key_id")); raw != "" {
+		id, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || id <= 0 {
+			return f, errors.New("invalid api_key_id")
+		}
+		f.APIKeyID = id
+	}
 	month := strings.TrimSpace(c.Query("month"))
 	startMonth := strings.TrimSpace(c.Query("start_month"))
 	endMonth := strings.TrimSpace(c.Query("end_month"))
+	startDate := strings.TrimSpace(c.Query("start_date"))
+	endDate := strings.TrimSpace(c.Query("end_date"))
+	if (month != "" || startMonth != "" || endMonth != "") && (startDate != "" || endDate != "") {
+		return f, errors.New("date filters cannot be combined with month filters")
+	}
 	if month != "" && (startMonth != "" || endMonth != "") {
 		return f, errors.New("month cannot be combined with start_month or end_month")
 	}
@@ -378,8 +403,23 @@ func parseFinanceFilters(c *gin.Context) (service.FinanceFilters, error) {
 		next := end.AddDate(0, 1, 0)
 		f.EndTime = &next
 	}
+	if startDate != "" {
+		start, err := time.ParseInLocation("2006-01-02", startDate, time.Local)
+		if err != nil {
+			return f, errors.New("start_date must use YYYY-MM-DD")
+		}
+		f.StartTime = &start
+	}
+	if endDate != "" {
+		end, err := time.ParseInLocation("2006-01-02", endDate, time.Local)
+		if err != nil {
+			return f, errors.New("end_date must use YYYY-MM-DD")
+		}
+		next := end.AddDate(0, 0, 1)
+		f.EndTime = &next
+	}
 	if f.StartTime != nil && f.EndTime != nil && !f.StartTime.Before(*f.EndTime) {
-		return f, errors.New("start_month must not be later than end_month")
+		return f, errors.New("start date must not be later than end date")
 	}
 	return f, nil
 }

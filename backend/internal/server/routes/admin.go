@@ -592,6 +592,8 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpA
 		adminSettings.GET("/client-node-policy", h.Admin.Setting.GetClientNodePolicy)
 		adminSettings.PUT("/client-node-policy", h.Admin.Setting.UpdateClientNodePolicy)
 		adminSettings.GET("/client-nodes", h.Admin.Setting.ListClientNodes)
+		adminSettings.POST("/client-nodes/upload", h.Admin.Setting.UploadClientNodeYAML)
+		adminSettings.DELETE("/client-nodes/upload", h.Admin.Setting.DeleteClientNodeYAML)
 		adminSettings.POST("/client-nodes/test", h.Admin.Setting.TestClientNodes)
 		adminSettings.GET("/client-provider-policy", h.Admin.Setting.GetClientProviderPolicy)
 		adminSettings.GET("/commerce-links", h.Admin.Setting.GetCommerceLinks)

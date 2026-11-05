@@ -43,6 +43,25 @@ func (r *financeRepository) ListUsers(ctx context.Context, search string) ([]ser
 	return out, rows.Err()
 }
 
+func (r *financeRepository) ListAPIKeysByUserID(ctx context.Context, userID int64) ([]service.FinanceAPIKey, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id, name,
+		CASE WHEN deleted_at IS NOT NULL THEN 'deleted' ELSE status END
+		FROM api_keys WHERE user_id = $1 ORDER BY created_at DESC, id DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	items := make([]service.FinanceAPIKey, 0)
+	for rows.Next() {
+		var item service.FinanceAPIKey
+		if err := rows.Scan(&item.ID, &item.Name, &item.Status); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
 func (r *financeRepository) ListBalances(ctx context.Context, f service.FinanceFilters) ([]service.FinanceUser, *pagination.PaginationResult, error) {
 	conditions := []string{"u.deleted_at IS NULL"}
 	args := []any{}
@@ -267,7 +286,12 @@ func (r *financeRepository) queryRecharges(ctx context.Context, where string, ar
 
 func (r *financeRepository) ListUsage(ctx context.Context, f service.FinanceFilters) ([]service.FinanceUsage, *pagination.PaginationResult, float64, error) {
 	where, args := financeWhere("ul.created_at", f)
+	if f.APIKeyID > 0 {
+		args = append(args, f.APIKeyID)
+		where += fmt.Sprintf(" AND ul.api_key_id = $%d", len(args))
+	}
 	base := ` FROM usage_logs ul JOIN users u ON u.id=ul.user_id
+		LEFT JOIN api_keys ak ON ak.id=ul.api_key_id AND ak.user_id=u.id
 		LEFT JOIN finance_group_members fgm ON fgm.user_id=u.id
 		LEFT JOIN finance_groups fg ON fg.id=fgm.group_id ` + where
 	var total int64
@@ -279,7 +303,7 @@ func (r *financeRepository) ListUsage(ctx context.Context, f service.FinanceFilt
 		return nil, nil, 0, err
 	}
 	argsPage := append(append([]any{}, args...), f.PageSize, (f.Page-1)*f.PageSize)
-	rows, err := r.db.QueryContext(ctx, `SELECT ul.id, u.id, u.email, COALESCE(u.username,''), COALESCE(fg.name,''), COALESCE(NULLIF(ul.requested_model,''), ul.model), COALESCE(ul.request_id,''), ul.input_tokens, ul.output_tokens, ul.actual_cost, ul.created_at`+base+` ORDER BY ul.created_at DESC, ul.id DESC LIMIT $`+fmt.Sprint(len(args)+1)+` OFFSET $`+fmt.Sprint(len(args)+2), argsPage...)
+	rows, err := r.db.QueryContext(ctx, `SELECT ul.id, u.id, ul.api_key_id, COALESCE(ak.name,''), u.email, COALESCE(u.username,''), COALESCE(fg.name,''), COALESCE(NULLIF(ul.requested_model,''), ul.model), COALESCE(ul.request_id,''), ul.input_tokens, ul.output_tokens, ul.actual_cost, ul.created_at`+base+` ORDER BY ul.created_at DESC, ul.id DESC LIMIT $`+fmt.Sprint(len(args)+1)+` OFFSET $`+fmt.Sprint(len(args)+2), argsPage...)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -287,7 +311,7 @@ func (r *financeRepository) ListUsage(ctx context.Context, f service.FinanceFilt
 	items := make([]service.FinanceUsage, 0)
 	for rows.Next() {
 		var item service.FinanceUsage
-		if err := rows.Scan(&item.ID, &item.UserID, &item.Email, &item.Username, &item.GroupName, &item.Model, &item.RequestID, &item.InputTokens, &item.OutputTokens, &item.ActualCost, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.UserID, &item.APIKeyID, &item.APIKeyName, &item.Email, &item.Username, &item.GroupName, &item.Model, &item.RequestID, &item.InputTokens, &item.OutputTokens, &item.ActualCost, &item.CreatedAt); err != nil {
 			return nil, nil, 0, err
 		}
 		item.TotalTokens = item.InputTokens + item.OutputTokens

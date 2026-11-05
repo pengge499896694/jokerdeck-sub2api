@@ -208,12 +208,106 @@ func TestClientNodePolicyRejectsUnsafeInputAndDBFailure(t *testing.T) {
 			t.Fatalf("unsafe URL accepted: %q", address)
 		}
 	}
+	if err := validateClientNodeURL("https://47.112.97.173:5000/api/v1/client/subscribe?token=example-token"); err != nil {
+		t.Fatalf("public IPv4 subscription URL with a custom port and query was rejected: %v", err)
+	}
 	s := &SettingService{settingRepo: &clientNodeSettingRepo{values: map[string]string{}}}
 	_, err := s.SetGlobalClientNodePolicy(context.Background(), &ClientNodePolicy{
 		Enabled: true, SubscriptionURL: defaultClientNodeSubscription, DisabledNodes: []string{"US-A", "US-A"},
 	})
 	if err == nil {
 		t.Fatal("duplicate disabled node accepted")
+	}
+}
+
+func TestUploadedClientNodeYAMLCanBeUsedAsTheOnlySource(t *testing.T) {
+	ctx := context.Background()
+	repo := &clientNodeSettingRepo{values: map[string]string{}}
+	s := &SettingService{settingRepo: repo}
+	yamlData := []byte("proxies:\n  - name: Local-Node\n    type: ss\n    server: 8.8.8.8\n    port: 443\n")
+	if err := s.SetUploadedClientNodeYAML(ctx, yamlData); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetGlobalClientNodePolicy(ctx, &ClientNodePolicy{Enabled: true}); err != nil {
+		t.Fatalf("uploaded YAML did not satisfy the source requirement: %v", err)
+	}
+
+	subscriptions, err := s.ListClientNodeSubscriptions(ctx)
+	if err != nil || len(subscriptions) != 1 || subscriptions[0].ID != clientNodeUploadedSourceID || !subscriptions[0].Primary || !subscriptions[0].Available || len(subscriptions[0].Nodes) != 1 || subscriptions[0].Nodes[0].Name != "Local-Node" {
+		t.Fatalf("uploaded YAML was not listed as a node source: %#v, %v", subscriptions, err)
+	}
+
+	merged, err := s.GetClientNodeSubscription(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document struct {
+		Proxies []struct {
+			Name string `yaml:"name"`
+		} `yaml:"proxies"`
+	}
+	if err := yaml.Unmarshal(merged, &document); err != nil {
+		t.Fatal(err)
+	}
+	if len(document.Proxies) != 1 || document.Proxies[0].Name != "Local-Node" {
+		t.Fatalf("uploaded YAML was not included in the client subscription: %#v", document.Proxies)
+	}
+	if !strings.Contains(string(merged), "CLIENT-PRIMARY") || strings.Contains(string(merged), "CLIENT-BACKUP") {
+		t.Fatalf("uploaded YAML was not assigned to the primary group: %s", merged)
+	}
+	if err := s.DeleteUploadedClientNodeYAML(ctx); err == nil {
+		t.Fatal("only node source was removed while no URL source was configured")
+	}
+}
+
+func TestUploadedClientNodeYAMLPrecedesConfiguredURLAndKeepsItAsBackup(t *testing.T) {
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("proxies:\n  - name: Remote-Node\n    type: ss\n"))
+	}))
+	defer remote.Close()
+
+	policy := &ClientNodePolicy{Enabled: true, SubscriptionURL: remote.URL}
+	uploaded := []byte("proxies:\n  - name: Uploaded-Node\n    type: ss\n")
+	sources := loadClientNodeSources(context.Background(), remote.Client(), policy, uploaded)
+	if len(sources) != 2 || sources[0].ID != clientNodeUploadedSourceID || !sources[0].Primary || sources[1].ID != "primary" || sources[1].Primary || sources[1].Doc == nil {
+		t.Fatalf("uploaded YAML did not become primary before URL source: %#v", sources)
+	}
+	merged, err := mergeClientNodeSources(sources, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(merged), "Uploaded-Node") || !strings.Contains(string(merged), "Remote-Node") {
+		t.Fatalf("both uploaded and URL nodes were not retained: %s", merged)
+	}
+	if !strings.Contains(string(merged), "CLIENT-PRIMARY") || !strings.Contains(string(merged), "CLIENT-BACKUP") {
+		t.Fatalf("primary/backup groups were not generated: %s", merged)
+	}
+}
+
+func TestUploadedClientNodeYAMLValidatesAndCanBeRemovedWithURLFallback(t *testing.T) {
+	ctx := context.Background()
+	repo := &clientNodeSettingRepo{values: map[string]string{}}
+	s := &SettingService{settingRepo: repo}
+	for _, invalid := range [][]byte{
+		[]byte("proxies: [unterminated"),
+		[]byte("proxies: []"),
+		[]byte(strings.Repeat("x", maxClientNodeSubscriptionSize+1)),
+	} {
+		if err := s.SetUploadedClientNodeYAML(ctx, invalid); err == nil {
+			t.Fatal("invalid or oversized YAML was accepted")
+		}
+	}
+	if _, err := s.SetGlobalClientNodePolicy(ctx, &ClientNodePolicy{Enabled: true, SubscriptionURL: "https://example.com/nodes.yaml"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetUploadedClientNodeYAML(ctx, []byte("proxies:\n  - name: Uploaded\n    type: ss\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteUploadedClientNodeYAML(ctx); err != nil {
+		t.Fatalf("uploaded YAML could not be removed while URL source remained: %v", err)
+	}
+	if _, ok := repo.values[clientNodeUploadedYAMLKey]; ok {
+		t.Fatal("uploaded YAML setting was not deleted")
 	}
 }
 
@@ -306,7 +400,7 @@ func TestClientNodeSubscriptionTreeRetainsFailedSources(t *testing.T) {
 	defer backup.Close()
 	policy := &ClientNodePolicy{SubscriptionURL: primary.URL, BackupSubscriptionURLs: []string{backup.URL}}
 	client := primary.Client()
-	sources, err := fetchClientNodeSources(context.Background(), client, policy)
+	sources, err := fetchClientNodeSources(context.Background(), client, policy, nil)
 	if err != nil || len(sources) != 2 || sources[0].Doc != nil || sources[1].Doc == nil {
 		t.Fatalf("failed source was not retained: %#v, %v", sources, err)
 	}

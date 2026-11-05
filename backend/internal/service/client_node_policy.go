@@ -19,6 +19,10 @@ import (
 
 const (
 	clientNodeGlobalKey           = "client_node_global_policy"
+	clientNodeUploadedYAMLKey     = "client_node_uploaded_yaml"
+	clientNodeUploadedSourceID    = "uploaded-yaml"
+	maxClientNodeSubscriptionSize = 1024 * 1024
+	maxClientNodeCount            = 500
 	defaultClientNodeSubscription = "https://234.qzz.io/fsllistyaml"
 )
 
@@ -86,9 +90,6 @@ func validateClientNodePolicy(policy *ClientNodePolicy) error {
 			return err
 		}
 	}
-	if policy.SubscriptionURL == "" && len(policy.BackupSubscriptionURLs) == 0 {
-		return errors.New("at least one subscription URL is required")
-	}
 	if len(policy.BackupSubscriptionURLs) > 5 {
 		return errors.New("too many backup subscription URLs")
 	}
@@ -143,6 +144,15 @@ func (s *SettingService) SetGlobalClientNodePolicy(ctx context.Context, policy *
 	if err := validateClientNodePolicy(policy); err != nil {
 		return nil, err
 	}
+	if policy.SubscriptionURL == "" && len(policy.BackupSubscriptionURLs) == 0 {
+		uploadedYAML, err := s.getUploadedClientNodeYAML(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(uploadedYAML) == 0 {
+			return nil, errors.New("at least one subscription URL or uploaded YAML is required")
+		}
+	}
 	copy := *policy
 	copy.SubscriptionEndpoint = ""
 	if copy.DisabledNodes == nil {
@@ -181,6 +191,63 @@ type clientNodeProxy struct {
 	Port   int    `yaml:"port"`
 }
 
+func parseClientNodeYAML(data []byte) (*clientNodeSubscriptionDocument, error) {
+	if len(data) == 0 || len(data) > maxClientNodeSubscriptionSize {
+		return nil, errors.New("YAML file must be between 1 byte and 1 MiB")
+	}
+	var document clientNodeSubscriptionDocument
+	if err := yaml.Unmarshal(data, &document); err != nil {
+		return nil, fmt.Errorf("invalid client node YAML: %w", err)
+	}
+	if len(document.Proxies) > maxClientNodeCount {
+		return nil, fmt.Errorf("YAML contains more than %d nodes", maxClientNodeCount)
+	}
+	if !hasUsableClientNodes(&document) {
+		return nil, errors.New("YAML must contain a non-empty proxies list")
+	}
+	for _, proxy := range document.Proxies {
+		if strings.TrimSpace(proxy.Name) == "" || strings.TrimSpace(proxy.Type) == "" {
+			continue
+		}
+		if err := validateClientNodeName(proxy.Name); err != nil {
+			return nil, err
+		}
+	}
+	return &document, nil
+}
+
+func (s *SettingService) SetUploadedClientNodeYAML(ctx context.Context, data []byte) error {
+	if _, err := parseClientNodeYAML(data); err != nil {
+		return err
+	}
+	return s.settingRepo.Set(ctx, clientNodeUploadedYAMLKey, string(data))
+}
+
+func (s *SettingService) getUploadedClientNodeYAML(ctx context.Context) ([]byte, error) {
+	raw, err := s.settingRepo.GetValue(ctx, clientNodeUploadedYAMLKey)
+	if errors.Is(err, ErrSettingNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if _, err := parseClientNodeYAML([]byte(raw)); err != nil {
+		return nil, fmt.Errorf("stored client node YAML is invalid: %w", err)
+	}
+	return []byte(raw), nil
+}
+
+func (s *SettingService) DeleteUploadedClientNodeYAML(ctx context.Context) error {
+	policy, err := s.GetGlobalClientNodePolicy(ctx)
+	if err != nil {
+		return err
+	}
+	if policy.SubscriptionURL == "" && len(policy.BackupSubscriptionURLs) == 0 {
+		return errors.New("configure a subscription URL before removing the only node source")
+	}
+	return s.settingRepo.Delete(ctx, clientNodeUploadedYAMLKey)
+}
+
 func fetchClientNodeSource(ctx context.Context, client *http.Client, subscriptionURL string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, subscriptionURL, nil)
 	if err != nil {
@@ -194,11 +261,11 @@ func fetchClientNodeSource(ctx context.Context, client *http.Client, subscriptio
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("subscription returned HTTP %d", resp.StatusCode)
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 1024*1024+1))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxClientNodeSubscriptionSize+1))
 	if err != nil {
 		return nil, err
 	}
-	if len(data) > 1024*1024 {
+	if len(data) > maxClientNodeSubscriptionSize {
 		return nil, errors.New("subscription is too large")
 	}
 	return data, nil
@@ -275,7 +342,11 @@ func (s *SettingService) GetClientNodeSubscription(ctx context.Context) ([]byte,
 	}
 	client, transport := newClientNodeHTTPClient()
 	defer transport.CloseIdleConnections()
-	sources, err := fetchClientNodeSources(ctx, client, policy)
+	uploadedYAML, err := s.getUploadedClientNodeYAML(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sources, err := fetchClientNodeSources(ctx, client, policy, uploadedYAML)
 	if err != nil {
 		return nil, err
 	}
@@ -291,21 +362,8 @@ type clientNodeSourceDocument struct {
 	Doc     *clientNodeSubscriptionDocument
 }
 
-func clientNodeSources(policy *ClientNodePolicy) []clientNodeSourceDocument {
-	sources := []clientNodeSourceDocument{}
-	if policy.SubscriptionURL != "" {
-		sources = append(sources, clientNodeSourceDocument{ID: "primary", Name: "主订阅", URL: policy.SubscriptionURL, Primary: true})
-	}
-	for index, subscriptionURL := range policy.BackupSubscriptionURLs {
-		sources = append(sources, clientNodeSourceDocument{
-			ID: fmt.Sprintf("backup-%d", index+1), Name: fmt.Sprintf("备用订阅 %d", index+1), URL: subscriptionURL,
-		})
-	}
-	return sources
-}
-
-func fetchClientNodeSources(ctx context.Context, client *http.Client, policy *ClientNodePolicy) ([]clientNodeSourceDocument, error) {
-	sources := loadClientNodeSources(ctx, client, policy)
+func fetchClientNodeSources(ctx context.Context, client *http.Client, policy *ClientNodePolicy, uploadedYAML []byte) ([]clientNodeSourceDocument, error) {
+	sources := loadClientNodeSources(ctx, client, policy, uploadedYAML)
 	for _, source := range sources {
 		if source.Doc != nil {
 			return sources, nil
@@ -314,8 +372,36 @@ func fetchClientNodeSources(ctx context.Context, client *http.Client, policy *Cl
 	return nil, errors.New("all client node subscriptions failed")
 }
 
-func loadClientNodeSources(ctx context.Context, client *http.Client, policy *ClientNodePolicy) []clientNodeSourceDocument {
-	sources := clientNodeSources(policy)
+func loadClientNodeSources(ctx context.Context, client *http.Client, policy *ClientNodePolicy, uploadedYAML []byte) []clientNodeSourceDocument {
+	sources := make([]clientNodeSourceDocument, 0, len(policy.BackupSubscriptionURLs)+2)
+	if len(uploadedYAML) > 0 {
+		if document, err := parseClientNodeYAML(uploadedYAML); err == nil {
+			// A locally uploaded file is the authoritative primary source. URL
+			// subscriptions remain available as backups for compatibility and
+			// automatic failover.
+			sources = append(sources, clientNodeSourceDocument{
+				ID: clientNodeUploadedSourceID, Name: "已上传 YAML", Primary: true, Data: uploadedYAML, Doc: document,
+			})
+		}
+	}
+	if policy.SubscriptionURL != "" {
+		name := "主订阅"
+		if len(uploadedYAML) > 0 {
+			name = "备用订阅 1"
+		}
+		sources = append(sources, clientNodeSourceDocument{
+			ID: "primary", Name: name, URL: policy.SubscriptionURL, Primary: len(uploadedYAML) == 0,
+		})
+	}
+	backupIndex := 1
+	if len(uploadedYAML) > 0 && policy.SubscriptionURL != "" {
+		backupIndex = 2
+	}
+	for index, subscriptionURL := range policy.BackupSubscriptionURLs {
+		sources = append(sources, clientNodeSourceDocument{
+			ID: fmt.Sprintf("backup-%d", index+backupIndex), Name: fmt.Sprintf("备用订阅 %d", index+backupIndex), URL: subscriptionURL,
+		})
+	}
 	var wg sync.WaitGroup
 	for index := range sources {
 		index := index
@@ -370,7 +456,11 @@ func (s *SettingService) ListClientNodeSubscriptions(ctx context.Context) ([]Cli
 	}
 	client, transport := newClientNodeHTTPClient()
 	defer transport.CloseIdleConnections()
-	sources := loadClientNodeSources(ctx, client, policy)
+	uploadedYAML, err := s.getUploadedClientNodeYAML(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sources := loadClientNodeSources(ctx, client, policy, uploadedYAML)
 	disabled := make(map[string]bool, len(policy.DisabledNodes))
 	for _, name := range policy.DisabledNodes {
 		disabled[name] = true
@@ -486,7 +576,11 @@ func (s *SettingService) TestClientNodeNodes(ctx context.Context, subscriptionID
 	}
 	client, transport := newClientNodeHTTPClient()
 	defer transport.CloseIdleConnections()
-	sources, err := fetchClientNodeSources(ctx, client, policy)
+	uploadedYAML, err := s.getUploadedClientNodeYAML(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sources, err := fetchClientNodeSources(ctx, client, policy, uploadedYAML)
 	if err != nil {
 		return nil, err
 	}

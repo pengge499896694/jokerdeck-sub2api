@@ -19,18 +19,22 @@
       </div>
 
       <section class="card p-4">
-        <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-2" :class="activeTab === 'usage' ? 'xl:grid-cols-7' : 'xl:grid-cols-6'">
           <div v-if="activeTab !== 'users'">
-            <label class="input-label">起始月份</label>
-            <input v-model="filters.start_month" type="month" class="input" :max="filters.end_month || undefined" @change="search" />
+            <label class="input-label">开始日期</label>
+            <input v-model="filters.start_date" type="date" class="input" :max="filters.end_date || undefined" @change="search" />
           </div>
           <div v-if="activeTab !== 'users'">
-            <label class="input-label">结束月份</label>
-            <input v-model="filters.end_month" type="month" class="input" :min="filters.start_month || undefined" @change="search" />
+            <label class="input-label">结束日期</label>
+            <input v-model="filters.end_date" type="date" class="input" :min="filters.start_date || undefined" @change="search" />
           </div>
           <div>
             <label class="input-label">用户</label>
-            <Select v-model="filters.user_id" :options="userOptions" searchable clearable @change="search" />
+            <Select v-model="filters.user_id" :options="userOptions" searchable clearable @change="onUserChange" />
+          </div>
+          <div v-if="activeTab === 'usage'">
+            <label class="input-label">API Key</label>
+            <Select v-model="filters.api_key_id" :options="apiKeyOptions" searchable clearable :disabled="!filters.user_id" @change="search" />
           </div>
           <div>
             <label class="input-label">财务分组</label>
@@ -102,7 +106,7 @@
                 <th class="px-4 py-3">时间</th><th class="px-4 py-3">用户</th><th class="px-4 py-3">分组</th><th class="px-4 py-3">类型</th><th class="px-4 py-3 text-right">金额</th><th class="px-4 py-3">状态</th><th class="px-4 py-3">备注</th>
               </tr>
               <tr v-else>
-                <th class="px-4 py-3">时间</th><th class="px-4 py-3">用户</th><th class="px-4 py-3">分组</th><th class="px-4 py-3">模型</th><th class="px-4 py-3">请求 ID</th><th class="px-4 py-3 text-right">Tokens</th><th class="px-4 py-3 text-right">费用</th>
+                <th class="px-4 py-3">时间</th><th class="px-4 py-3">用户</th><th class="px-4 py-3">API Key</th><th class="px-4 py-3">分组</th><th class="px-4 py-3">模型</th><th class="px-4 py-3">请求 ID</th><th class="px-4 py-3 text-right">Tokens</th><th class="px-4 py-3 text-right">费用</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100 dark:divide-dark-800">
@@ -118,12 +122,13 @@
                 <tr v-for="item in usageItems" :key="item.id">
                   <td class="whitespace-nowrap px-4 py-3 text-gray-500">{{ formatTime(item.created_at) }}</td>
                   <td class="px-4 py-3"><div class="font-medium">{{ item.username || '—' }}</div><div class="text-xs text-gray-500">{{ item.email }}</div></td>
+                  <td class="px-4 py-3"><div class="font-medium">{{ item.api_key_name || `Key #${item.api_key_id}` }}</div><div class="text-xs text-gray-500">ID {{ item.api_key_id }}</div></td>
                   <td class="px-4 py-3">{{ item.group_name || '未分组' }}</td><td class="max-w-[180px] truncate px-4 py-3">{{ item.model }}</td><td class="max-w-[180px] truncate px-4 py-3 font-mono text-xs">{{ item.request_id || '—' }}</td>
                   <td class="px-4 py-3 text-right">{{ item.total_tokens.toLocaleString() }}</td><td class="px-4 py-3 text-right font-medium">${{ formatMoney(item.actual_cost) }}</td>
                 </tr>
               </template>
-              <tr v-if="!loading && pageItems.length === 0"><td colspan="7" class="px-4 py-12 text-center text-gray-500">暂无记录</td></tr>
-              <tr v-if="loading"><td colspan="7" class="px-4 py-12 text-center text-gray-500">加载中...</td></tr>
+              <tr v-if="!loading && pageItems.length === 0"><td :colspan="activeTab === 'usage' ? 8 : 7" class="px-4 py-12 text-center text-gray-500">暂无记录</td></tr>
+              <tr v-if="loading"><td :colspan="activeTab === 'usage' ? 8 : 7" class="px-4 py-12 text-center text-gray-500">加载中...</td></tr>
             </tbody>
           </table>
         </div>
@@ -213,7 +218,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
-import financeAPI, { type FinanceBalanceHistoryItem, type FinanceFilters, type FinanceGroup, type FinanceRecharge, type FinanceUsage, type FinanceUser } from '@/api/finance'
+import financeAPI, { type FinanceAPIKey, type FinanceBalanceHistoryItem, type FinanceFilters, type FinanceGroup, type FinanceRecharge, type FinanceUsage, type FinanceUser } from '@/api/finance'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 
@@ -231,8 +236,10 @@ const savingGroupId = ref<number | null>(null)
 const deleteDialog = reactive({ open: false, group: null as FinanceGroup | null })
 const groupDialog = reactive({ open: false, id: 0, name: '', description: '' })
 const today = new Date()
-const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
-const filters = reactive<FinanceFilters>({ start_month: currentMonth, end_month: currentMonth, user_id: undefined, group_id: undefined, search: '', page: 1, page_size: 20 })
+const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+const monthStartDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
+const filters = reactive<FinanceFilters>({ start_date: monthStartDate, end_date: todayDate, user_id: undefined, api_key_id: undefined, group_id: undefined, search: '', page: 1, page_size: 20 })
+const apiKeys = ref<FinanceAPIKey[]>([])
 const page = reactive({ total: 0, page: 1, page_size: 20, pages: 0, total_amount: 0 })
 const tabs = [{ value: 'recharge' as const, label: '充值记录' }, { value: 'usage' as const, label: '使用记录' }, { value: 'users' as const, label: '用户余额' }]
 const historyTypeOptions = [{ value: '', label: '全部变动' }, { value: 'balance', label: '余额充值' }, { value: 'admin_balance', label: '余额调整' }, { value: 'concurrency', label: '并发变动' }, { value: 'admin_concurrency', label: '并发调整' }]
@@ -240,22 +247,26 @@ const historyDialog = reactive({ open: false, user: null as FinanceUser | null, 
 
 const groupOptions = computed(() => [{ value: undefined, label: '全部分组' }, ...groups.value.map((item) => ({ value: item.id, label: item.name }))])
 const userOptions = computed(() => [{ value: undefined, label: '全部用户' }, ...users.value.map((item) => ({ value: item.id, label: `${item.username || item.email} (${item.email})` }))])
+const apiKeyOptions = computed(() => [{ value: undefined, label: filters.user_id ? '全部 API Key' : '请先选择用户' }, ...apiKeys.value.map((item) => ({ value: item.id, label: `${item.name} (#${item.id})${item.status === 'active' ? '' : ` · ${apiKeyStatusLabel(item.status)}`}` }))])
 const pageItems = computed(() => activeTab.value === 'recharge' ? rechargeItems.value : usageItems.value)
 const groupedUserIds = computed(() => new Set(groups.value.flatMap((group) => group.members.map((member) => member.id))))
 const ungroupedUsers = computed(() => users.value.filter((user) => !groupedUserIds.value.has(user.id)))
 const rangeLabel = computed(() => {
-  if (filters.start_month && filters.end_month) return `${filters.start_month} ~ ${filters.end_month}`
-  if (filters.start_month) return `${filters.start_month} 起`
-  if (filters.end_month) return `截至 ${filters.end_month}`
-  return '全部月份'
+  if (filters.start_date && filters.end_date) return `${filters.start_date} ~ ${filters.end_date}`
+  if (filters.start_date) return `${filters.start_date} 起`
+  if (filters.end_date) return `截至 ${filters.end_date}`
+  return '全部日期'
 })
 
 function formatMoney(value: number) { return Number(value || 0).toFixed(4) }
 function formatTime(value: string) { return new Date(value).toLocaleString() }
-function query(): FinanceFilters { return { start_month: filters.start_month, end_month: filters.end_month, user_id: filters.user_id, group_id: filters.group_id, search: filters.search, page: filters.page, page_size: filters.page_size } }
+function apiKeyStatusLabel(status: string) {
+  return ({ disabled: '已禁用', quota_exhausted: '额度耗尽', expired: '已过期', deleted: '已删除' } as Record<string, string>)[status] || status
+}
+function query(): FinanceFilters { return { start_date: filters.start_date, end_date: filters.end_date, user_id: filters.user_id, api_key_id: filters.api_key_id, group_id: filters.group_id, search: filters.search, page: filters.page, page_size: filters.page_size } }
 function validRange() {
-  if (filters.start_month && filters.end_month && filters.start_month > filters.end_month) {
-    appStore.showError('起始月份不能晚于结束月份')
+  if (filters.start_date && filters.end_date && filters.start_date > filters.end_date) {
+    appStore.showError('开始日期不能晚于结束日期')
     return false
   }
   return true
@@ -294,6 +305,19 @@ async function loadHistory(pageNumber: number) {
     historyDialog.loading = false
   }
 }
+async function onUserChange() {
+  filters.api_key_id = undefined
+  apiKeys.value = []
+  if (filters.user_id) {
+    const userId = filters.user_id
+    try {
+      const result = await financeAPI.apiKeys(userId)
+      if (filters.user_id === userId) apiKeys.value = result.items
+    }
+    catch (error) { appStore.showError(extractApiErrorMessage(error, 'API Key 加载失败')) }
+  }
+  await search()
+}
 function historyTitle(item: FinanceBalanceHistoryItem) {
   if (item.type === 'balance') return '充值'
   if (item.type === 'affiliate_balance') return '返利'
@@ -307,7 +331,7 @@ async function loadAll() {
   catch (error) { appStore.showError(extractApiErrorMessage(error, '财务数据加载失败')) } finally { loading.value = false }
 }
 async function search() { if (!validRange()) return; filters.page = 1; await loadRecords().catch((error) => appStore.showError(extractApiErrorMessage(error, '明细加载失败'))) }
-function resetFilters() { Object.assign(filters, { start_month: '', end_month: '', user_id: undefined, group_id: undefined, search: '', page: 1 }); void search() }
+function resetFilters() { Object.assign(filters, { start_date: '', end_date: '', user_id: undefined, api_key_id: undefined, group_id: undefined, search: '', page: 1 }); apiKeys.value = []; void search() }
 async function switchTab(tab: Tab) { activeTab.value = tab; filters.page = 1; await search() }
 async function changePage(value: number) { filters.page = value; await loadRecords() }
 async function changePageSize(value: number) { filters.page_size = value; filters.page = 1; await loadRecords() }
