@@ -75,6 +75,7 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		nil, // signupBonusReclaim
 		&service.UsageCleanupService{},
 		idempotencyCleanupSvc,
+		service.NewGeminiCachedContentService(nil, nil, cfg),
 		&service.BatchImageCleanupService{},
 		nil, // batchImageWorker
 		pricingSvc,
@@ -82,6 +83,8 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		nil, // feedbackReminder
 		billingCacheSvc,
 		&service.UsageRecordWorkerPool{},
+		service.ProvideBalanceNotifyService(nil, nil, nil, nil),
+		service.NewDigestSessionStore(),
 		&service.SubscriptionService{},
 		oauthSvc,
 		openAIOAuthSvc,

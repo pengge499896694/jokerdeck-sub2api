@@ -35,7 +35,6 @@ func RegisterPaymentRoutes(
 	settingService *service.SettingService,
 	panelRateLimiter *middleware.PanelRateLimiter,
 	redisClient *redis.Client,
-	consentGuard gin.HandlerFunc,
 ) {
 	// --- User-facing payment endpoints (authenticated) ---
 	authenticated := v1.Group("/payment")
@@ -92,6 +91,7 @@ func RegisterPaymentRoutes(
 	// --- Admin payment endpoints (admin auth) ---
 	adminGroup := v1.Group("/admin/payment")
 	adminGroup.Use(gin.HandlerFunc(adminAuth))
+	adminGroup.Use(panelRateLimiter.Global())
 	adminGroup.Use(gin.HandlerFunc(auditLog))
 	adminGroup.Use(middleware.AdminComplianceGuard(settingService))
 	{

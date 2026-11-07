@@ -33,7 +33,6 @@ func newPaymentRoutesTestRouter(redisClient *redis.Client) *gin.Engine {
 		nil,
 		nil,
 		redisClient,
-		noop,
 	)
 	return router
 }
