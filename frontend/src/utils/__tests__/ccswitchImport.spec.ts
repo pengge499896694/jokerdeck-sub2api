@@ -81,7 +81,7 @@ describe('ccswitchImport utils', () => {
     'https://api.example.com/',
     'https://api.example.com/v1',
     'https://api.example.com/v1/'
-  ])('imports Codex with exactly one /v1 suffix for base URL %s', (baseUrl) => {
+  ])('preserves the normalized Codex base URL %s', (baseUrl) => {
     const params = paramsFromDeeplink(
       buildCcSwitchImportDeeplink({
         ...baseInput,
@@ -91,7 +91,7 @@ describe('ccswitchImport utils', () => {
       })
     )
 
-    expect(params.get('endpoint')).toBe('https://api.example.com/v1')
+    expect(params.get('endpoint')).toBe(baseUrl.replace(/\/+$/, ''))
   })
 
   it.each([

@@ -35,7 +35,13 @@ func RegisterPaymentRoutes(
 	settingService *service.SettingService,
 	panelRateLimiter *middleware.PanelRateLimiter,
 	redisClient *redis.Client,
+	consentGuards ...gin.HandlerFunc,
 ) {
+	consentGuard := gin.HandlerFunc(func(c *gin.Context) { c.Next() })
+	if len(consentGuards) > 0 && consentGuards[0] != nil {
+		consentGuard = consentGuards[0]
+	}
+
 	// --- User-facing payment endpoints (authenticated) ---
 	authenticated := v1.Group("/payment")
 	authenticated.Use(gin.HandlerFunc(jwtAuth))

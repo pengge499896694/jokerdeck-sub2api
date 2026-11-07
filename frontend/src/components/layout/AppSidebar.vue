@@ -746,6 +746,8 @@ const flagAffiliate = makeSidebarFlag(FeatureFlags.affiliate)
 const flagRiskControl = makeSidebarFlag(FeatureFlags.riskControl)
 const flagPluginManagement = makeSidebarFlag(FeatureFlags.pluginManagement)
 const flagMCP = makeSidebarFlag(FeatureFlags.mcp)
+const flagXianyuRecharge = () => XIANYU_RECHARGE_ENABLED
+const flagXianyuStore = () => XIANYU_STORE_ENABLED
 const flagOpsMonitoring = () => adminSettingsStore.opsMonitoringEnabled
 const flagAdminPayment = () => adminSettingsStore.paymentEnabled
 const flagBatchImageAccess = () => canUseBatchImage.value
