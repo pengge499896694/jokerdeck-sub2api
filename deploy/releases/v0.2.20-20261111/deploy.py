@@ -60,8 +60,17 @@ def start():
  (STAGE/'sub2api').write_bytes(data);(STAGE/'sub2api').chmod(0o755)
  assert not out(['docker','ps','-a','--filter',f'name=^/{NEW}$','--format','{{.Names}}']).strip()
  # Build before touching the production schema. Pin the existing image digest.
- base_image=x['Image'];(STAGE/'Dockerfile').write_text('FROM '+base_image+'\nUSER root\nCOPY --chown=1000:1000 sub2api /app/sub2api\nRUN chmod 0755 /app/sub2api\n')
- run(['docker','build','-t',IMAGE,str(STAGE)])
+ resource_manifest=json.loads((STAGE/'resources-manifest.json').read_text())
+ assert resource_manifest and all(path.startswith('resources/') and '..' not in pathlib.PurePosixPath(path).parts for path in resource_manifest)
+ for path,digest in resource_manifest.items():
+  assert hashlib.sha256((STAGE/path).read_bytes()).hexdigest()==digest,('resource checksum mismatch',path)
+  (STAGE/path).chmod(0o644)
+ base_image='local/sub2api:base-v0.2.20-20261111'
+ run(['docker','tag',x['Image'],base_image])
+ assert out(['docker','image','inspect',base_image,'--format','{{.Id}}']).strip()==x['Image'],'base image digest drift'
+ build=json.loads((STAGE/'build-info.json').read_text());assert build['version']=='0.2.20'
+ (STAGE/'Dockerfile').write_text('FROM '+base_image+'\nUSER root\nCOPY --chown=1000:1000 sub2api /app/sub2api\nCOPY --chown=1000:1000 resources /app/resources\nLABEL org.opencontainers.image.version="0.2.20" org.opencontainers.image.revision="'+build['commit']+'"\nRUN chmod 0755 /app/sub2api\n')
+ run(['docker','build','--pull=false','-t',IMAGE,str(STAGE)])
  # Bound lock contention explicitly; retries may only accept this exact migration.
  current=dict(line.split('|') for line in out(['docker','exec','sub2api-postgres','psql','-U','sub2api','-d','sub2api','-At','-F','|','-c','SELECT filename,checksum FROM schema_migrations']).splitlines())
  previous=json.loads((BACKUP/'migrations.json').read_text())
@@ -86,6 +95,7 @@ def start():
  else:raise RuntimeError('candidate not healthy; traffic remains old')
  y=inspect(NEW);assert dict(e.split('=',1) for e in y['Config']['Env'])==dict(e.split('=',1) for e in x['Config']['Env']),'production environment drift'
  assert out(['docker','exec',NEW,'sha256sum','/app/sub2api']).split()[0]==expected
+ for path,digest in resource_manifest.items():assert out(['docker','exec',NEW,'sha256sum','/app/'+path]).split()[0]==digest,('image resource drift',path)
  health(NEW);assert CONF.read_bytes()==(BACKUP/'nginx.conf').read_bytes()
  print('Candidate healthy, environment/binary verified; no traffic switched.',flush=True)
  print(out(['docker','exec',NEW,'/app/sub2api','--version']),flush=True)
