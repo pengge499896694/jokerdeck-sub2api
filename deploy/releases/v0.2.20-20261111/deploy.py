@@ -11,11 +11,12 @@ def run(a,**kw):return subprocess.run(a,check=True,**kw)
 def out(a,**kw):return subprocess.check_output(a,text=True,**kw)
 def inspect(n):return json.loads(out(['docker','inspect',n]))[0]
 def base(n):return 'http://'+inspect(n)['NetworkSettings']['Networks']['public-proxy']['IPAddress']+':8080'
-def req(url,token=None):
+def req(url,token=None,data=None):
  headers={'User-Agent':'Jokerdeck-Upgrade-Check/0.2.20'}
  if token:headers['Authorization']='Bearer '+token
+ if data is not None:headers['Content-Type']='application/json'
  try:
-  with CLIENT.open(urllib.request.Request(url,headers=headers),timeout=30) as r:return r.status,r.read(),dict(r.headers)
+  with CLIENT.open(urllib.request.Request(url,headers=headers,data=data),timeout=30) as r:return r.status,r.read(),dict(r.headers)
  except urllib.error.HTTPError as e:return e.code,e.read(),dict(e.headers)
 def health(n):
  x=inspect(n);assert x['State']['Running'] and x['RestartCount']==0,(n,'not stable')
@@ -129,7 +130,7 @@ def verify():
  code,index,_=req(b+'/');main=re.search(r'src="([^"?#]+\.js)',index.decode()).group(1);source=req(b+main)[1].decode()
  for marker in ['OptimizedCanvasView-','FinanceView-']:assert marker in source,marker
  for path in ['/v1/messages','/v1/chat/completions','/v1/responses']:
-  assert req(b+path)[0] in (401,405),path
+  assert req(b+path,data=b'{}')[0]==401,path
  (STAGE/'verification.json').write_text(json.dumps(report,indent=2));print('Authenticated custom API and frontend checks passed; no purchasing/recharge/upstream calls sent.',flush=True)
 
 def assets():
