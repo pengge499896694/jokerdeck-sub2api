@@ -2,6 +2,7 @@
 import collections
 import contextlib
 import io
+import json
 import pathlib
 import subprocess
 import tempfile
@@ -89,6 +90,23 @@ class ReleaseSafetyTests(unittest.TestCase):
         self.ns['health'].assert_called_with(self.ns['OLD'])
         self.ns['edge_reload'].assert_called_once_with(b'old-upstream')
         self.assertTrue((self.ns['STAGE'] / 'observation.json').exists())
+
+    def test_public_settings_only_allow_version_and_disabled_mcp_addition(self):
+        old = {'data': {'version': '0.2.19', 'payment_enabled': True, 'canvas': {'relay': 'unchanged'}}}
+        new = {'data': dict(old['data'], version='0.2.20', mcp_enabled=False)}
+        check = self.ns['assert_public_settings_compatible']
+        check(json.dumps(old), json.dumps(new))
+        new['data']['mcp_enabled'] = True
+        with self.assertRaises(AssertionError):
+            check(json.dumps(old), json.dumps(new))
+        new['data']['mcp_enabled'] = False
+        new['data']['canvas'] = {'relay': 'changed'}
+        with self.assertRaises(AssertionError):
+            check(json.dumps(old), json.dumps(new))
+        new['data']['canvas'] = old['data']['canvas']
+        new['data']['extra_setting'] = False
+        with self.assertRaises(AssertionError):
+            check(json.dumps(old), json.dumps(new))
 
     def test_old_workers_prevent_retiring_previous_app(self):
         (self.ns['STAGE'] / 'pre-switch-workers.json').write_text('[12,13]')

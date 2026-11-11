@@ -100,6 +100,13 @@ def start():
  print('Candidate healthy, environment/binary verified; no traffic switched.',flush=True)
  print(out(['docker','exec',NEW,'/app/sub2api','--version']),flush=True)
 
+def assert_public_settings_compatible(before,after):
+ a,b=json.loads(before),json.loads(after);da,db=a.get('data',a),b.get('data',b)
+ assert da.pop('version')=='0.2.19' and db.pop('version')=='0.2.20','unexpected release version'
+ # The only new public-setting field is an explicitly disabled MCP feature.
+ assert 'mcp_enabled' not in da and db.pop('mcp_enabled') is False,'MCP must stay disabled'
+ assert a==b,'existing public/custom settings changed'
+
 def verify():
  bearer=token();a=base(OLD);b=base(NEW);report=[]
  paths=['/health','/api/v1/settings/public','/api/v1/user/profile','/api/v1/client/node-policy','/api/v1/client/node-subscription','/api/v1/admin/settings/client-node-policy','/api/v1/admin/settings/client-provider-policy','/api/v1/admin/settings/client-nodes','/api/v1/admin/settings/commerce-links','/api/v1/admin/settings/canvas-network','/api/v1/canvas/network-config','/api/v1/finance/users','/api/v1/finance/users?start_month=2026-08&end_month=2026-10','/api/v1/finance/balances','/api/v1/finance/groups','/api/v1/recharge-terms','/api/v1/self-channel-monitors','/api/v1/xianyu-recharge-orders','/api/v1/feedback/tickets','/api/v1/conversation-logs/access','/api/v1/conversation-logs','/api/v1/canvas','/api/v1/admin/announcements','/api/v1/admin/payment/config','/api/v1/admin/groups','/api/v1/admin/settings/admin-api-keys']
@@ -110,10 +117,7 @@ def verify():
   equal=ba==bb
   if path in strict:assert equal,('custom behavior changed',path)
   if path=='/api/v1/settings/public':
-   ja,jb=json.loads(ba),json.loads(bb)
-   for obj in (ja,jb):
-    obj.get('data',obj).pop('version',None)
-   assert ja==jb,'public settings changed except version'
+   assert_public_settings_compatible(ba,bb)
   report.append({'path':path,'old':ca,'new':cb,'identical':equal,'old_sha256':hashlib.sha256(ba).hexdigest(),'new_sha256':hashlib.sha256(bb).hexdigest()});print(path,ca,cb,'identical='+str(equal),flush=True)
  for path in ['/','/login','/canvas','/canvas-optimized','/admin/settings?tab=canvasRoute','/infinite-canvas/','/canvas-guide/01-canvas-home.png']:
   c,raw,h=req(b+path);assert c==200,(path,c)
@@ -189,7 +193,7 @@ def log_report():
    if m[2].startswith(('/v1/','/v1beta/','/api/v1/gateway/')) and 'Jokerdeck-Upgrade-Check/0.2.20' not in line:gate[m[3]]+=1
   if re.search(r'connect\(\) failed|no live upstreams|host not found in upstream|upstream prematurely closed connection|upstream timed out',line):gateway_upstream_errors+=1
  errors=subprocess.run(['docker','logs','--since',(STAGE/'switch-time.txt').read_text().strip(),NEW],capture_output=True,text=True,check=True)
- fatal=[x for x in (errors.stdout+'\n'+errors.stderr).splitlines() if re.search(r'(?i)panic:|fatal|out of memory|\"level\":\"error\"',x)]
+ fatal=[x for x in (errors.stdout+'\n'+errors.stderr).splitlines() if re.search(r'(?i)panic:|fatal|out of memory|\"level\":\s*\"error\"|\tERROR\t',x)]
  return statuses,gate,gateway_upstream_errors,fatal
 
 def observe(seconds):
