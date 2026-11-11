@@ -131,6 +131,9 @@ def assets():
    if nc!=200 or 'html' in nh.get('Content-Type',''):
     assert path.startswith(('/assets/','/infinite-canvas/assets/')) and '..' not in path
     target=root/path.lstrip('/');target.parent.mkdir(parents=True,exist_ok=True)
+    directory=target.parent
+    while directory!=root:
+     directory.chmod(0o755);directory=directory.parent
     if target.exists():assert target.read_bytes()==body,('immutable asset mismatch',path)
     else:target.write_bytes(body);target.chmod(0o644)
     saved.append(path)
