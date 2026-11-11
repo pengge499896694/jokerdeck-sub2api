@@ -2,6 +2,8 @@
 import collections
 import contextlib
 import io
+import gzip
+import hashlib
 import json
 import pathlib
 import subprocess
@@ -31,6 +33,47 @@ class ReleaseSafetyTests(unittest.TestCase):
         self.ns['health'] = Mock()
         self.ns['run'] = Mock()
         self.ns['out'] = Mock(return_value='unchanged-start-time')
+
+    def prepare_start_artifacts(self, valid_resource=True):
+        stage = self.ns['STAGE']
+        (stage / 'rehearsal.json').write_text('{"full_backup_restored":true}')
+        data = b'fake-verified-binary'
+        (stage / 'sub2api.gz').write_bytes(gzip.compress(data))
+        (stage / 'SHA256SUMS').write_text(hashlib.sha256(data).hexdigest() + '  sub2api\n')
+        image_id = 'sha256:' + 'a' * 64
+        (self.ns['BACKUP'] / 'active-inspect.json').write_text(json.dumps({'Image': image_id}))
+        resources = stage / 'resources' / 'model-pricing'
+        resources.mkdir(parents=True)
+        data = b'{"test-model":{}}'
+        (resources / 'prices.json').write_bytes(data)
+        digest = hashlib.sha256(data).hexdigest() if valid_resource else 'incorrect'
+        (stage / 'resources-manifest.json').write_text(json.dumps({'resources/model-pricing/prices.json': digest}))
+        (stage / 'build-info.json').write_text('{"version":"0.2.20","commit":"verified-commit"}')
+        self.ns['out'].side_effect = ['', image_id]
+        return image_id
+
+    def test_start_pins_named_base_and_resources_before_database_migration(self):
+        image_id = self.prepare_start_artifacts()
+        def run(command, **kwargs):
+            if command[:2] == ['docker', 'build']:
+                raise RuntimeError('stop before database migration')
+        self.ns['run'].side_effect = run
+        with self.assertRaisesRegex(RuntimeError, 'stop before database migration'):
+            self.ns['start']()
+        dockerfile = (self.ns['STAGE'] / 'Dockerfile').read_text()
+        self.assertIn('FROM local/sub2api:base-v0.2.20-20261111', dockerfile)
+        self.assertNotIn('FROM sha256:', dockerfile)
+        self.assertIn('COPY --chown=1000:1000 resources /app/resources', dockerfile)
+        commands = [c.args[0] for c in self.ns['run'].call_args_list]
+        self.assertEqual(commands[0], ['docker', 'tag', image_id, 'local/sub2api:base-v0.2.20-20261111'])
+        self.assertEqual(commands[1][:3], ['docker', 'build', '--pull=false'])
+        self.assertFalse(any('psql' in cmd for cmd in commands))
+
+    def test_resource_checksum_failure_never_builds_or_touches_database(self):
+        self.prepare_start_artifacts(valid_resource=False)
+        with self.assertRaisesRegex(AssertionError, 'resource checksum mismatch'):
+            self.ns['start']()
+        self.ns['run'].assert_not_called()
 
     def test_reload_keeps_bind_mount_inode_and_only_reloads(self):
         conf = self.ns['CONF']
