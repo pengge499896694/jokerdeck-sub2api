@@ -74,12 +74,12 @@ def start():
  run(['docker','build','--pull=false','-t',IMAGE,str(STAGE)])
  # Apply only the two verified additive migrations, with bounded lock waits.
  current=dict(line.split('|') for line in out(['docker','exec','sub2api-postgres','psql','-U','sub2api','-d','sub2api','-At','-F','|','-c','SELECT filename,checksum FROM schema_migrations']).splitlines())
- previous=json.loads((BACKUP/'migrations.json').read_text()); expected=json.loads((STAGE/'migrations.json').read_text())
+ previous=json.loads((BACKUP/'migrations.json').read_text()); migration_manifest=json.loads((STAGE/'migrations.json').read_text())
  names=['249_add_usage_logs_api_key_cost_index_notx.sql','250_openai_cache_write_ttl.sql']
- assert all(expected.get(k)==v for k,v in previous.items()) and set(expected)-set(previous)==set(names)
+ assert all(migration_manifest.get(k)==v for k,v in previous.items()) and set(migration_manifest)-set(previous)==set(names)
  assert all(current.get(k)==v for k,v in previous.items()) and set(current)-set(previous)<=set(names)
  for name in names:
-  sql=(STAGE/name).read_text().strip();checksum=hashlib.sha256(sql.encode()).hexdigest();assert expected[name]==checksum
+  sql=(STAGE/name).read_text().strip();checksum=hashlib.sha256(sql.encode()).hexdigest();assert migration_manifest[name]==checksum
   if name in current:assert current[name]==checksum;continue
   if name.endswith('_notx.sql'):
    # psql reads each statement separately; CONCURRENTLY must not run in a transaction.
