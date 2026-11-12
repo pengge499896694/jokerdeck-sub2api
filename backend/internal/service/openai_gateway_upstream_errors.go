@@ -463,6 +463,7 @@ func (s *OpenAIGatewayService) newOpenAIAccountFailoverErrorWithClassificationHe
 		retryableOnSameAccount || oauth429Retry,
 	)
 	if shouldDisable {
+		// A configured cooldown takes precedence over any same-account retry budget.
 		failoverErr.RetryableOnSameAccount = false
 		failoverErr.ForceSameAccountRetry = false
 		failoverErr.SameAccountRetryMax = 0
