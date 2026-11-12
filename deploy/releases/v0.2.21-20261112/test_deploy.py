@@ -90,6 +90,16 @@ class ReleaseSafetyTests(unittest.TestCase):
             ['docker', 'exec', 'edge-nginx', 'nginx', '-s', 'reload'],
         ])
 
+    def test_probe_retries_dns_timeout_but_does_not_hide_http_failures(self):
+        self.ns['out'].side_effect = [subprocess.CalledProcessError(28, 'curl'), '200']
+        with patch.object(self.ns['time'], 'sleep'):
+            self.assertEqual(self.ns['curl_status']('example.test'), 200)
+        self.assertEqual(self.ns['out'].call_count, 2)
+        self.ns['out'].reset_mock(side_effect=True)
+        self.ns['out'].return_value = '502'
+        self.assertEqual(self.ns['curl_status']('example.test'), 502)
+        self.ns['out'].assert_called_once()
+
     def test_finalize_accepts_application_env_without_image_key(self):
         old = self.ns['OLD']
         (self.ns['BACKUP'] / 'active-inspect.json').write_text('{"Config":{"Image":"old-image"}}')

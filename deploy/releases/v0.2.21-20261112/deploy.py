@@ -40,7 +40,14 @@ def curl_status(host,path='/health',origin=False,data=None):
  a=['curl','-sS','-A','Jokerdeck-Upgrade-Check/0.2.21','--connect-timeout','3','--max-time','10','-o','/dev/null','-w','%{http_code}']
  if origin:a+=['--resolve',host+':443:127.0.0.1']
  if data is not None:a+=['-H','Content-Type: application/json','--data-binary',data]
- a += [f'https://{host}{path}'];return int(out(a))
+ a += [f'https://{host}{path}']
+ for attempt in range(3):
+  try:return int(out(a))
+  except subprocess.CalledProcessError as e:
+   # A transient DNS/connection timeout is not an HTTP failure. Retry it;
+   # HTTP statuses are returned immediately and remain subject to observation.
+   if e.returncode not in (6,28) or attempt==2:raise
+   time.sleep(1)
 
 def token():
  row=out(['docker','exec','sub2api-postgres','psql','-U','sub2api','-d','sub2api','-Atc',"SELECT id,email,role,password_hash FROM users WHERE role IN ('admin','super_admin') AND status='active' ORDER BY id LIMIT 1"]).strip().split('|')
