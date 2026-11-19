@@ -4,7 +4,7 @@ import base64,collections,datetime,gzip,hashlib,hmac,json,os,pathlib,re,secrets,
 os.umask(0o077)
 ROOT=pathlib.Path('/opt/sub2api'); STAGE=ROOT/'staging/v0.2.23-20261119'; BACKUP=ROOT/'backups/pre-v0.2.23-20261119'
 OLD='sub2api-v0.2.21-20261112'; NEW='sub2api-v0.2.23-20261119'; IMAGE='local/sub2api:v0.2.23-jokerdeck-20261119'
-CONF=pathlib.Path('/opt/edge/nginx.conf'); HOSTS=('jokerdeck.de5.net','jokerdeck.cc.cd','api.jokere.asia'); UPSTREAMS=11
+CONF=pathlib.Path('/opt/edge/nginx.conf'); HOSTS=('jokerdeck.de5.net','jokerdeck.cc.cd','api.jokere.asia'); ALL_HOSTS=('jokerdeck.cc.cd','jokerdeck.de5.net','jokerdeck.ccwu.cc','jokerdeck.new.tg','jokerdeck.us.ci','jokerdeck.bbroot.com','jokerdeck.kz.ci','jokere.duckdns.org','sub2api.186-244-245-198.sslip.io','api.jokere.asia','jokere.icu'); UPSTREAMS=11
 OLD_LINE=f'set $sub2api_upstream http://{OLD}:8080;'.encode(); NEW_LINE=f'set $sub2api_upstream http://{NEW}:8080;'.encode()
 CLIENT=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 def run(a,**kw):return subprocess.run(a,check=True,**kw)
@@ -144,6 +144,9 @@ def verify():
  for marker in ['OptimizedCanvasView-','FinanceView-']:assert marker in source,marker
  for path in ['/v1/messages','/v1/chat/completions','/v1/responses']:
   assert req(b+path,data=b'{}')[0]==401,path
+ all_sites={host:curl_status(host,origin=True) for host in ALL_HOSTS}
+ assert all(value==200 for value in all_sites.values()),all_sites
+ (STAGE/'all-sites-baseline.json').write_text(json.dumps(all_sites,indent=2))
  (STAGE/'verification.json').write_text(json.dumps(report,indent=2));print('Authenticated custom API and frontend checks passed; no purchasing/recharge/upstream calls sent.',flush=True)
 
 def assets():
