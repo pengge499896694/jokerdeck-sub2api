@@ -173,7 +173,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 			reqStream = false
 		}
 
-		accountScopedBody, accountScoped, scopeErr := applyCodexAccountIdentityClientMetadataRaw(body, codexAccountIdentitySource(c, account), getAPIKeyIDFromContext(c))
+		accountScopedBody, accountScoped, scopeErr := applyCodexAccountIdentityClientMetadataRaw(body, codexAccountIdentitySource(c, account), getAPIKeyIDFromContext(c), codexClientSessionID(c))
 		if scopeErr != nil {
 			return nil, scopeErr
 		}
@@ -1557,6 +1557,33 @@ func applyOpenAIStreamFailedErrorPassthroughRule(
 	)
 }
 
+// OpenAIStreamFailedFrame is the in-stream failed or error frame behind a
+// failover, kept so an exhausted failover can still apply the error
+// passthrough rules that would have matched the frame.
+type OpenAIStreamFailedFrame struct {
+	Platform string
+	Payload  []byte
+	Message  string
+}
+
+// ApplyOpenAIStreamFailedFrameRule applies the error passthrough rules to the
+// frame that triggered an exhausted failover, matching it the way
+// applyOpenAIStreamFailedErrorPassthroughRule does for an in-band frame.
+func ApplyOpenAIStreamFailedFrameRule(c *gin.Context, failoverErr *UpstreamFailoverError) (status int, errType string, errMsg string, matched bool) {
+	if failoverErr == nil || failoverErr.StreamFailedFrame == nil {
+		return 0, "", "", false
+	}
+	frame := failoverErr.StreamFailedFrame
+	status, errType, errMsg, matched = applyOpenAIStreamFailedErrorPassthroughRule(c, frame.Platform, frame.Payload, frame.Message)
+	if !matched {
+		return 0, "", "", false
+	}
+	if errMsg == "" {
+		errMsg = frame.Message
+	}
+	return status, errType, errMsg, true
+}
+
 func openAIStreamFailedEventShouldFailover(payload []byte, message string) bool {
 	if hit, _, _ := detectOpenAICyberPolicy(payload); hit {
 		return false
@@ -1792,9 +1819,11 @@ func (s *OpenAIGatewayService) newOpenAIStreamFailoverErrorWithModel(
 		classificationHeaders = nil
 	}
 	failoverErr := s.newOpenAIAccountFailoverErrorWithClassificationHeaders(account, statusCode, headers, classificationHeaders, payload, message, shouldDisable, retryableOnSameAccount)
-	// A generic response.failed frame is not automatically a transport retry:
-	// only replay known request-capacity signals or a stream that broke before
-	// the client received semantic output. Preserve explicit pool-mode policy.
+	if len(payload) > 0 && account != nil {
+		failoverErr.StreamFailedFrame = &OpenAIStreamFailedFrame{Platform: account.Platform, Payload: payload, Message: message}
+	}
+	// Generic response.failed frames are not transport retries unless they
+	// represent a known capacity shed event.
 	if len(payload) > 0 && !isOpenAIUpstreamCapacityShedEvent(payload) {
 		failoverErr.ForceSameAccountRetry = false
 		failoverErr.SameAccountRetryMax = 0

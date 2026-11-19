@@ -83,6 +83,7 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		nil, // feedbackReminder
 		billingCacheSvc,
 		&service.UsageRecordWorkerPool{},
+		nil, // usageBillingLanes
 		service.ProvideBalanceNotifyService(nil, nil, nil, nil),
 		service.NewDigestSessionStore(),
 		&service.SubscriptionService{},
