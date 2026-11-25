@@ -851,7 +851,7 @@ func (s *OpenAIGatewayService) forwardGrokMediaVideoContent(
 				req.Header.Set("Range", rangeHeader)
 			}
 		}
-		account.ApplyHeaderOverrides(req.Header)
+		account.ApplyHeaderOverrides(req.Context(), req.Header)
 		proxyURL := ""
 		if account.ProxyID != nil && account.Proxy != nil {
 			proxyURL = account.Proxy.URL()
